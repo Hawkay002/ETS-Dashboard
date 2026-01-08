@@ -515,7 +515,7 @@ function GuestListModule({ tickets, initialFilterStatus, initialFilterType, init
 
     return (
         <div className="space-y-4">
-            {/* Toolbar - Centered Layout */}
+            {/* Toolbar - Single Line, Full Width Row 2 */}
             <div className="bg-slate-900/40 p-4 rounded-2xl border border-white/5 flex flex-col gap-4 relative z-20">
                 
                 {/* ROW 1: Search (Full Width) */}
@@ -527,42 +527,39 @@ function GuestListModule({ tickets, initialFilterStatus, initialFilterType, init
                     </div>
                 </div>
                 
-                {/* ROW 2: Filters & Select (Full Width & Equal Height) */}
-                <div className="flex flex-col sm:flex-row gap-2 w-full">
-                    {/* Filters Expand with flex-1 and have thicker padding (py-2.5) */}
-                    <select value={initialFilterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="bg-slate-950 border border-white/10 rounded-xl text-sm px-3 py-2.5 text-slate-300 focus:outline-none flex-1">
+                {/* ROW 2: Filters & Select (Single Line, Full Width) */}
+                <div className="flex gap-2 w-full">
+                    <select value={initialFilterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="bg-slate-950 border border-white/10 rounded-xl text-sm px-3 py-2.5 text-slate-300 focus:outline-none flex-1 min-w-0">
                         <option value="all">All Status</option>
                         <option value="arrived">Arrived</option>
                         <option value="coming-soon">Pending</option>
                         <option value="absent">Absent</option>
                     </select>
-                    <select value={initialFilterType} onChange={(e) => setFilterType(e.target.value)} className="bg-slate-950 border border-white/10 rounded-xl text-sm px-3 py-2.5 text-slate-300 focus:outline-none flex-1">
+                    
+                    <select value={initialFilterType} onChange={(e) => setFilterType(e.target.value)} className="bg-slate-950 border border-white/10 rounded-xl text-sm px-3 py-2.5 text-slate-300 focus:outline-none flex-1 min-w-0">
                         <option value="all">All Types</option>
                         <option value="Classic">Classic</option>
                         <option value="Diamond">VIP</option>
                         <option value="Gold">VVIP</option>
-                        <option value="Special">Special (Grouped)</option>
+                        <option value="Special">Special</option>
                     </select>
                     
-                    <div className="flex gap-2 justify-end sm:justify-start">
-                        {/* Delete Button (Always Visible, disabled if 0 selected, BEFORE Select) */}
-                        <button 
-                            onClick={handleDelete} 
-                            disabled={selectedIds.size === 0} 
-                            className={`p-2.5 rounded-xl border transition-all w-12 flex items-center justify-center ${
-                                selectedIds.size > 0 
-                                ? 'border-red-500/20 bg-red-500/10 text-red-400 hover:bg-red-500/20 cursor-pointer' 
-                                : 'border-white/5 text-slate-600 opacity-50 cursor-not-allowed'
-                            }`}
-                        >
-                            <Trash2 className="w-5 h-5" />
-                        </button>
+                    {/* Buttons - Fixed width, no wrap */}
+                    <button 
+                        onClick={handleDelete} 
+                        disabled={selectedIds.size === 0} 
+                        className={`p-2.5 rounded-xl border transition-all w-12 flex-none flex items-center justify-center ${
+                            selectedIds.size > 0 
+                            ? 'border-red-500/20 bg-red-500/10 text-red-400 hover:bg-red-500/20 cursor-pointer' 
+                            : 'border-white/5 text-slate-600 opacity-50 cursor-not-allowed'
+                        }`}
+                    >
+                        <Trash2 className="w-5 h-5" />
+                    </button>
 
-                        {/* Select Button */}
-                        <button onClick={toggleSelectionMode} className={`p-2.5 rounded-xl border w-12 flex items-center justify-center ${isSelectionMode ? 'bg-blue-600 border-blue-600 text-white' : 'border-white/10 text-slate-400'}`}>
-                            <CheckSquare className="w-5 h-5" />
-                        </button>
-                    </div>
+                    <button onClick={toggleSelectionMode} className={`p-2.5 rounded-xl border w-12 flex-none flex items-center justify-center ${isSelectionMode ? 'bg-blue-600 border-blue-600 text-white' : 'border-white/10 text-slate-400'}`}>
+                        <CheckSquare className="w-5 h-5" />
+                    </button>
                 </div>
 
                 {/* ROW 3: Import / Export (Centered) */}
@@ -962,7 +959,7 @@ function ImportModal({ close, currentUser }) {
                 try {
                     const data = JSON.parse(evt.target.result);
                     if (Array.isArray(data)) {
-                        await processImportData(data, close);
+                        await processImportData(data, currentUser, close);
                     } else {
                         alert("Invalid JSON format. Expected an array.");
                     }
@@ -978,7 +975,7 @@ function ImportModal({ close, currentUser }) {
                 const wsname = wb.SheetNames[0];
                 const ws = wb.Sheets[wsname];
                 const data = XLSX.utils.sheet_to_json(ws);
-                await processImportData(data, close);
+                await processImportData(data, currentUser, close);
             };
             reader.readAsBinaryString(file);
         } else {
@@ -986,7 +983,7 @@ function ImportModal({ close, currentUser }) {
         }
     };
 
-    const processImportData = async (data, closeCallback) => {
+    const processImportData = async (data, currentUser, closeCallback) => {
         if (confirm(`Import ${data.length} records?`)) {
             const chunks = [];
             for (let i = 0; i < data.length; i += 400) chunks.push(data.slice(i, i + 400));
