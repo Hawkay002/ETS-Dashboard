@@ -8,7 +8,7 @@ import {
 import { 
   LayoutDashboard, Users, Activity, Settings, Search, Shield, Ticket, 
   UserCheck, Clock, Lock, LogOut, Menu, X, ChevronRight, Smartphone, LogIn,
-  Filter, Download, Upload, Trash2, MoreVertical, CheckSquare, Square, Crown, FileText
+  Filter, Download, Upload, Trash2, MoreVertical, CheckSquare, Square, Crown, FileText, ChevronDown
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
@@ -326,7 +326,7 @@ function DashboardLayout({ user }) {
 }
 
 // ===========================================
-// SUB-MODULE: GUEST LIST (With Import/Export)
+// SUB-MODULE: GUEST LIST
 // ===========================================
 function GuestListModule({ tickets, initialFilterStatus, initialFilterType, initialSort, setFilterStatus, setFilterType, setSort, currentUser }) {
     const [search, setSearch] = useState('');
@@ -382,10 +382,15 @@ function GuestListModule({ tickets, initialFilterStatus, initialFilterType, init
         setIsSelectionMode(false);
     };
 
-    // -- EXPORT HANDLER (6 Formats) --
+    // -- EXPORT HANDLER (6 Formats) - EXPORTS ONLY SELECTED --
     const handleExport = async (format) => {
         setIsExportMenuOpen(false);
-        const data = filteredTickets.map(t => ({
+        // Only get tickets that are in the selectedIds set
+        const exportSubset = tickets.filter(t => selectedIds.has(t.id));
+
+        if (exportSubset.length === 0) return; // Should be prevented by UI, but safe check
+
+        const data = exportSubset.map(t => ({
             Name: t.name,
             Type: t.ticketType || 'Classic',
             Phone: t.phone,
@@ -394,7 +399,7 @@ function GuestListModule({ tickets, initialFilterStatus, initialFilterType, init
             Entry: t.scannedAt ? new Date(t.scannedAt).toLocaleString() : ''
         }));
 
-        const fileName = `GuestList_${new Date().toISOString().split('T')[0]}`;
+        const fileName = `GuestList_Selected_${new Date().toISOString().split('T')[0]}`;
 
         switch (format) {
             case 'json': {
@@ -426,7 +431,7 @@ function GuestListModule({ tickets, initialFilterStatus, initialFilterType, init
             }
             case 'pdf': {
                 const doc = new jsPDF();
-                doc.text("Guest List", 14, 20);
+                doc.text("Selected Guest List", 14, 20);
                 doc.autoTable({
                     head: [['Name', 'Type', 'Phone', 'Status', 'Entry']],
                     body: data.map(d => [d.Name, d.Type, d.Phone, d.Status, d.Entry]),
@@ -441,7 +446,7 @@ function GuestListModule({ tickets, initialFilterStatus, initialFilterType, init
                         properties: {},
                         children: [
                             new Paragraph({
-                                text: "Event Guest List",
+                                text: "Selected Guest List",
                                 heading: HeadingLevel.HEADING_1,
                                 spacing: { after: 200 },
                             }),
@@ -474,61 +479,79 @@ function GuestListModule({ tickets, initialFilterStatus, initialFilterType, init
 
     return (
         <div className="space-y-4">
-            {/* Toolbar - Added 'relative z-20' to parent and removed 'overflow-x-auto' from children to fix clipping */}
-            <div className="flex flex-col md:flex-row gap-4 bg-slate-900/40 p-4 rounded-2xl border border-white/5 relative z-20">
-                <div className="relative flex-1">
-                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-                   <input type="text" placeholder="Search guests..." value={search} onChange={e => setSearch(e.target.value)}
-                     className="w-full bg-slate-950 border border-white/10 rounded-xl py-2 pl-10 pr-4 text-sm focus:outline-none focus:border-blue-500 text-white placeholder:text-slate-600" />
-                </div>
+            {/* Toolbar - Split into 2 rows, z-20 for dropdown overlap */}
+            <div className="bg-slate-900/40 p-4 rounded-2xl border border-white/5 flex flex-col gap-4 relative z-20">
                 
-                <div className="flex gap-2 items-center flex-wrap">
-                    <select value={initialFilterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="bg-slate-950 border border-white/10 rounded-lg text-xs px-3 py-2 text-slate-300 focus:outline-none">
-                        <option value="all">All Status</option>
-                        <option value="arrived">Arrived</option>
-                        <option value="coming-soon">Pending</option>
-                        <option value="absent">Absent</option>
-                    </select>
-                    <select value={initialFilterType} onChange={(e) => setFilterType(e.target.value)} className="bg-slate-950 border border-white/10 rounded-lg text-xs px-3 py-2 text-slate-300 focus:outline-none">
-                        <option value="all">All Types</option>
-                        <option value="Classic">Classic</option>
-                        <option value="Diamond">VIP</option>
-                        <option value="Gold">VVIP</option>
-                        <option value="Special">Special (Grouped)</option>
-                    </select>
+                {/* ROW 1: Search & Filters */}
+                <div className="flex flex-col md:flex-row gap-4 justify-between items-start md:items-center">
+                    <div className="relative flex-1 w-full md:w-auto">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                        <input type="text" placeholder="Search guests..." value={search} onChange={e => setSearch(e.target.value)}
+                        className="w-full bg-slate-950 border border-white/10 rounded-xl py-2 pl-10 pr-4 text-sm focus:outline-none focus:border-blue-500 text-white placeholder:text-slate-600" />
+                    </div>
                     
-                    <button onClick={() => setIsSelectionMode(!isSelectionMode)} className={`p-2 rounded-lg border ${isSelectionMode ? 'bg-blue-600 border-blue-600 text-white' : 'border-white/10 text-slate-400'}`}>
-                        <CheckSquare className="w-4 h-4" />
-                    </button>
-                    
-                    {isSelectionMode ? (
-                        <button onClick={handleDelete} className="p-2 rounded-lg border border-red-500/20 bg-red-500/10 text-red-400">
-                            <Trash2 className="w-4 h-4" />
+                    <div className="flex gap-2 flex-wrap w-full md:w-auto justify-end">
+                        <select value={initialFilterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="bg-slate-950 border border-white/10 rounded-lg text-xs px-3 py-2 text-slate-300 focus:outline-none">
+                            <option value="all">All Status</option>
+                            <option value="arrived">Arrived</option>
+                            <option value="coming-soon">Pending</option>
+                            <option value="absent">Absent</option>
+                        </select>
+                        <select value={initialFilterType} onChange={(e) => setFilterType(e.target.value)} className="bg-slate-950 border border-white/10 rounded-lg text-xs px-3 py-2 text-slate-300 focus:outline-none">
+                            <option value="all">All Types</option>
+                            <option value="Classic">Classic</option>
+                            <option value="Diamond">VIP</option>
+                            <option value="Gold">VVIP</option>
+                            <option value="Special">Special (Grouped)</option>
+                        </select>
+                        
+                        <button onClick={() => setIsSelectionMode(!isSelectionMode)} className={`p-2 rounded-lg border ${isSelectionMode ? 'bg-blue-600 border-blue-600 text-white' : 'border-white/10 text-slate-400'}`}>
+                            <CheckSquare className="w-4 h-4" />
                         </button>
-                    ) : (
-                        <>
-                            {/* EXPORT BUTTON - Now appearing BEFORE Import */}
-                            <div className="relative">
-                                <button onClick={() => setIsExportMenuOpen(!isExportMenuOpen)} className="p-2 rounded-lg border border-white/10 text-slate-400 hover:bg-white/5" title="Export">
-                                    <Download className="w-4 h-4" />
-                                </button>
-                                {isExportMenuOpen && (
-                                    <div className="absolute right-0 top-12 w-32 bg-slate-900 border border-white/10 rounded-xl shadow-xl z-50 overflow-hidden flex flex-col p-1">
-                                        {['json','csv','xlsx','docx','txt','pdf'].map(fmt => (
-                                            <button key={fmt} onClick={() => handleExport(fmt)} className="px-3 py-2 text-xs text-left text-slate-300 hover:bg-white/10 rounded uppercase font-medium">
-                                                .{fmt}
-                                            </button>
-                                        ))}
-                                    </div>
-                                )}
-                            </div>
-
-                            {/* IMPORT BUTTON - Now appearing AFTER Export */}
-                            <button onClick={() => setIsImportModalOpen(true)} className="p-2 rounded-lg border border-white/10 text-slate-400 hover:bg-white/5" title="Import CSV/JSON">
-                                <Upload className="w-4 h-4" />
+                        
+                        {/* Show delete only if items selected */}
+                        {isSelectionMode && selectedIds.size > 0 && (
+                            <button onClick={handleDelete} className="p-2 rounded-lg border border-red-500/20 bg-red-500/10 text-red-400">
+                                <Trash2 className="w-4 h-4" />
                             </button>
-                        </>
-                    )}
+                        )}
+                    </div>
+                </div>
+
+                {/* ROW 2: Import / Export - Full width separation line */}
+                <div className="flex flex-wrap gap-3 border-t border-white/5 pt-4">
+                     
+                     {/* IMPORT BUTTON - Left Side */}
+                     <button onClick={() => setIsImportModalOpen(true)} className="flex items-center gap-2 px-4 py-2 rounded-lg border border-white/10 text-slate-300 hover:bg-white/5 text-sm font-medium transition-colors">
+                        <Upload className="w-4 h-4" />
+                        <span>Import Data</span>
+                     </button>
+
+                     {/* EXPORT BUTTON - Right Side (Disabled if 0 selected) */}
+                     <div className="relative">
+                        <button 
+                            disabled={selectedIds.size === 0} 
+                            onClick={() => setIsExportMenuOpen(!isExportMenuOpen)} 
+                            className="flex items-center gap-2 px-4 py-2 rounded-lg border border-white/10 text-slate-300 hover:bg-white/5 text-sm font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:bg-transparent"
+                        >
+                            <Download className="w-4 h-4" />
+                            <span>Export Selected {selectedIds.size > 0 ? `(${selectedIds.size})` : ''}</span>
+                            <ChevronDown className="w-3 h-3 ml-1 opacity-50" />
+                        </button>
+                        
+                        {/* Dropdown Menu - Positioned absolute z-50 to float over table */}
+                        {isExportMenuOpen && (
+                            <div className="absolute top-full mt-2 left-0 w-40 bg-slate-900 border border-white/10 rounded-xl shadow-2xl z-50 overflow-hidden flex flex-col p-1 animate-in fade-in zoom-in-95 duration-200">
+                                {['json','csv','xlsx','docx','txt','pdf'].map(fmt => (
+                                    <button key={fmt} onClick={() => handleExport(fmt)} className="px-3 py-2 text-xs text-left text-slate-300 hover:bg-white/10 rounded uppercase font-medium flex items-center justify-between group">
+                                        <span>.{fmt}</span>
+                                        <Download className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity text-blue-400" />
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+                     </div>
+
                 </div>
             </div>
 
@@ -940,4 +963,4 @@ function StatusDot({ action }) {
     'CONFIG_CHANGE': 'bg-amber-500', 'FACTORY_RESET': 'bg-red-500'
   };
   return <div className={`w-2 h-2 rounded-full mt-1.5 ${colors[action] || 'bg-slate-500'}`}></div>;
-} 
+}
