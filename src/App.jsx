@@ -8,7 +8,7 @@ import {
 import { 
   LayoutDashboard, Users, Logs, Settings, Search, Shield, Ticket, 
   UserCheck, Clock, Lock, LogOut, Menu, X, ChevronRight, Smartphone, LogIn,
-  Filter, Download, Upload, Trash2, MoreVertical, CheckSquare, Square, Crown, FileText, ChevronDown, X as CloseIcon, Terminal, Copy, Play
+  Filter, Download, Upload, Trash2, MoreVertical, CheckSquare, Square, Crown, FileText, ChevronDown, X as CloseIcon, Terminal, Copy, Play, Save, Edit2
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
@@ -395,7 +395,6 @@ function ConsoleModule({ currentUser }) {
     const copyToClipboard = () => {
         if(currentCommand) {
             navigator.clipboard.writeText(currentCommand);
-            // Optional: visual feedback
         }
     };
 
@@ -503,6 +502,7 @@ function GuestListModule({ tickets, initialFilterStatus, initialFilterType, init
     const [selectedIds, setSelectedIds] = useState(new Set());
     const [isSelectionMode, setIsSelectionMode] = useState(false);
     const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+    const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
     
     // EXPORT MODAL STATE
     const [isExportModalOpen, setIsExportModalOpen] = useState(false);
@@ -555,13 +555,17 @@ function GuestListModule({ tickets, initialFilterStatus, initialFilterType, init
         setIsSelectionMode(!isSelectionMode);
     };
 
-    const handleDelete = async () => {
-        if (!confirm(`Delete ${selectedIds.size} guests?`)) return;
+    const handleDeleteClick = () => {
+        setIsDeleteModalOpen(true);
+    };
+
+    const confirmDelete = async () => {
         const batch = writeBatch(db);
         selectedIds.forEach(id => batch.delete(doc(db, APP_COLLECTION_ROOT, SHARED_DATA_ID, 'tickets', id)));
         await batch.commit();
         setSelectedIds(new Set());
         setIsSelectionMode(false);
+        setIsDeleteModalOpen(false);
     };
 
     // -- OPEN EXPORT MODAL --
@@ -716,7 +720,7 @@ function GuestListModule({ tickets, initialFilterStatus, initialFilterType, init
                     
                     {/* Buttons - Fixed width, no wrap */}
                     <button 
-                        onClick={handleDelete} 
+                        onClick={handleDeleteClick} 
                         disabled={selectedIds.size === 0} 
                         className={`p-2.5 rounded-xl border transition-all w-12 flex-none flex items-center justify-center ${
                             selectedIds.size > 0 
@@ -749,10 +753,19 @@ function GuestListModule({ tickets, initialFilterStatus, initialFilterType, init
                     >
                         <Download className="w-4 h-4" />
                         <span>Export Data</span>
-                     </button>
+                    </button>
 
                 </div>
             </div>
+
+            {/* Delete Confirmation Modal */}
+            <DeleteModal 
+                isOpen={isDeleteModalOpen} 
+                onClose={() => setIsDeleteModalOpen(false)} 
+                onConfirm={confirmDelete} 
+                count={selectedIds.size} 
+                type="guests"
+            />
 
             {/* Export Modal */}
             {isExportModalOpen && (
@@ -870,6 +883,7 @@ function LogsModule({ logs }) {
     const [search, setSearch] = useState('');
     const [selectedIds, setSelectedIds] = useState(new Set());
     const [isSelectionMode, setIsSelectionMode] = useState(false);
+    const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
 
     const filteredLogs = useMemo(() => {
         return logs.filter(l => {
@@ -879,13 +893,17 @@ function LogsModule({ logs }) {
         });
     }, [logs, filter, search]);
 
-    const handleDelete = async () => {
-        if (!confirm(`Delete ${selectedIds.size} logs?`)) return;
+    const handleDeleteClick = () => {
+        setIsDeleteModalOpen(true);
+    };
+
+    const confirmDelete = async () => {
         const batch = writeBatch(db);
         selectedIds.forEach(id => batch.delete(doc(db, 'activity_logs', id)));
         await batch.commit();
         setSelectedIds(new Set());
         setIsSelectionMode(false);
+        setIsDeleteModalOpen(false);
     };
 
     const toggleSelect = (id) => {
@@ -936,7 +954,7 @@ function LogsModule({ logs }) {
                     
                     {/* Delete Button (Always Visible, Disabled by Default, Before Select) */}
                     <button 
-                        onClick={handleDelete} 
+                        onClick={handleDeleteClick} 
                         disabled={selectedIds.size === 0} 
                         className={`p-2.5 rounded-xl border transition-all w-12 flex items-center justify-center h-[42px] ${
                             selectedIds.size > 0 
@@ -953,6 +971,15 @@ function LogsModule({ logs }) {
                     </button>
                 </div>
             </div>
+
+            {/* Delete Confirmation Modal */}
+            <DeleteModal 
+                isOpen={isDeleteModalOpen} 
+                onClose={() => setIsDeleteModalOpen(false)} 
+                onConfirm={confirmDelete} 
+                count={selectedIds.size} 
+                type="logs"
+            />
 
             <div className="bg-slate-900/40 border border-white/5 rounded-2xl overflow-hidden">
                 <div className="overflow-x-auto">
@@ -1003,6 +1030,20 @@ function SettingsModule({ settings, currentUser }) {
     const isAdmin = currentUser.email === ADMIN_EMAIL;
     const [users, setUsers] = useState([]);
     
+    // Edit State
+    const [isEditing, setIsEditing] = useState(false);
+    const [formData, setFormData] = useState({ name: '', place: '', deadline: '' });
+
+    useEffect(() => {
+        if(settings) {
+            setFormData({
+                name: settings.name || '',
+                place: settings.place || '',
+                deadline: settings.deadline ? new Date(settings.deadline).toISOString().slice(0,16) : ''
+            });
+        }
+    }, [settings]);
+    
     useEffect(() => {
         if (!isAdmin) return;
         const fetchUsers = async () => {
@@ -1013,22 +1054,67 @@ function SettingsModule({ settings, currentUser }) {
         fetchUsers();
     }, [isAdmin]);
 
+    const handleSaveConfig = async () => {
+        try {
+            await setDoc(doc(db, APP_COLLECTION_ROOT, SHARED_DATA_ID, 'settings', 'config'), {
+                name: formData.name,
+                place: formData.place,
+                deadline: new Date(formData.deadline).getTime()
+            }, { merge: true });
+            
+            // Add Log
+            await  setDoc(doc(collection(db, 'activity_logs')), {
+                action: 'CONFIG_CHANGE',
+                details: `Updated Event Config: ${formData.name}`,
+                timestamp: Date.now(),
+                username: currentUser.email
+            });
+
+            setIsEditing(false);
+            alert("Configuration Updated Successfully!");
+        } catch (e) {
+            console.error(e);
+            alert("Failed to update config");
+        }
+    };
+
     return (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <div className="bg-slate-900/40 border border-white/5 rounded-2xl p-6">
-               <h2 className="text-lg font-medium text-white mb-6 flex items-center gap-2"><Settings className="w-5 h-5"/> Configuration</h2>
+               <div className="flex justify-between items-center mb-6">
+                   <h2 className="text-lg font-medium text-white flex items-center gap-2"><Settings className="w-5 h-5"/> Configuration</h2>
+                   <button 
+                        onClick={() => isEditing ? handleSaveConfig() : setIsEditing(true)}
+                        className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${isEditing ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-white/5 text-slate-400 hover:text-white border border-white/10'}`}
+                   >
+                       {isEditing ? <><Save className="w-3 h-3"/> Save Changes</> : <><Edit2 className="w-3 h-3"/> Edit</>}
+                   </button>
+               </div>
+               
                <div className="space-y-6">
                  <div className="flex flex-col gap-1 pb-4 border-b border-white/5">
                    <span className="text-xs text-slate-500 uppercase">Event Name</span>
-                   <span className="text-slate-200 font-medium text-lg">{settings?.name || '--'}</span>
+                   {isEditing ? (
+                       <input type="text" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="bg-black/20 border border-white/10 rounded-lg p-2 text-white text-sm focus:border-blue-500 outline-none"/>
+                   ) : (
+                       <span className="text-slate-200 font-medium text-lg">{settings?.name || '--'}</span>
+                   )}
                  </div>
                  <div className="flex flex-col gap-1 pb-4 border-b border-white/5">
                    <span className="text-xs text-slate-500 uppercase">Venue</span>
-                   <span className="text-slate-200 font-medium">{settings?.place || '--'}</span>
+                   {isEditing ? (
+                       <input type="text" value={formData.place} onChange={e => setFormData({...formData, place: e.target.value})} className="bg-black/20 border border-white/10 rounded-lg p-2 text-white text-sm focus:border-blue-500 outline-none"/>
+                   ) : (
+                       <span className="text-slate-200 font-medium">{settings?.place || '--'}</span>
+                   )}
                  </div>
                  <div className="flex flex-col gap-1">
                    <span className="text-xs text-slate-500 uppercase">Deadline</span>
-                   <span className="text-slate-200 font-medium">{settings?.deadline ? new Date(settings.deadline).toLocaleString() : 'Not Set'}</span>
+                   {isEditing ? (
+                       <input type="datetime-local" value={formData.deadline} onChange={e => setFormData({...formData, deadline: e.target.value})} className="bg-black/20 border border-white/10 rounded-lg p-2 text-white text-sm focus:border-blue-500 outline-none invert-calendar-icon"/>
+                   ) : (
+                       <span className="text-slate-200 font-medium">{settings?.deadline ? new Date(settings.deadline).toLocaleString() : 'Not Set'}</span>
+                   )}
                  </div>
                </div>
             </div>
@@ -1116,6 +1202,24 @@ function AdminControlPanel({ users }) {
 // ===========================================
 // SUB-COMPONENTS
 // ===========================================
+function DeleteModal({ isOpen, onClose, onConfirm, count, type }) {
+    if (!isOpen) return null;
+    return (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm animate-in fade-in">
+            <div className="bg-slate-900 border border-white/10 rounded-2xl p-6 w-full max-w-sm shadow-2xl relative">
+                <h3 className="text-lg font-medium text-white mb-2">Delete {type}?</h3>
+                <p className="text-slate-400 text-sm mb-6">
+                    Are you sure you want to delete <span className="text-red-400 font-bold">{count}</span> selected {type.toLowerCase()}? This action cannot be undone.
+                </p>
+                <div className="flex gap-3">
+                    <button onClick={onClose} className="flex-1 py-2.5 rounded-xl border border-white/10 text-slate-400 text-sm hover:bg-white/5 transition-colors">Cancel</button>
+                    <button onClick={onConfirm} className="flex-1 py-2.5 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm font-medium hover:bg-red-500/20 transition-all">Delete</button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
 function ImportModal({ close, currentUser }) {
     const handleFile = async (e) => {
         const file = e.target.files[0];
