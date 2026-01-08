@@ -474,15 +474,15 @@ function GuestListModule({ tickets, initialFilterStatus, initialFilterType, init
 
     return (
         <div className="space-y-4">
-            {/* Toolbar */}
-            <div className="flex flex-col md:flex-row gap-4 bg-slate-900/40 p-4 rounded-2xl border border-white/5">
+            {/* Toolbar - Added 'relative z-20' to parent and removed 'overflow-x-auto' from children to fix clipping */}
+            <div className="flex flex-col md:flex-row gap-4 bg-slate-900/40 p-4 rounded-2xl border border-white/5 relative z-20">
                 <div className="relative flex-1">
                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
                    <input type="text" placeholder="Search guests..." value={search} onChange={e => setSearch(e.target.value)}
                      className="w-full bg-slate-950 border border-white/10 rounded-xl py-2 pl-10 pr-4 text-sm focus:outline-none focus:border-blue-500 text-white placeholder:text-slate-600" />
                 </div>
                 
-                <div className="flex gap-2 overflow-x-auto pb-1 md:pb-0 items-center">
+                <div className="flex gap-2 items-center flex-wrap">
                     <select value={initialFilterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="bg-slate-950 border border-white/10 rounded-lg text-xs px-3 py-2 text-slate-300 focus:outline-none">
                         <option value="all">All Status</option>
                         <option value="arrived">Arrived</option>
@@ -507,10 +507,7 @@ function GuestListModule({ tickets, initialFilterStatus, initialFilterType, init
                         </button>
                     ) : (
                         <>
-                            <button onClick={() => setIsImportModalOpen(true)} className="p-2 rounded-lg border border-white/10 text-slate-400 hover:bg-white/5" title="Import CSV/JSON">
-                                <Upload className="w-4 h-4" />
-                            </button>
-                            
+                            {/* EXPORT BUTTON - Now appearing BEFORE Import */}
                             <div className="relative">
                                 <button onClick={() => setIsExportMenuOpen(!isExportMenuOpen)} className="p-2 rounded-lg border border-white/10 text-slate-400 hover:bg-white/5" title="Export">
                                     <Download className="w-4 h-4" />
@@ -525,6 +522,11 @@ function GuestListModule({ tickets, initialFilterStatus, initialFilterType, init
                                     </div>
                                 )}
                             </div>
+
+                            {/* IMPORT BUTTON - Now appearing AFTER Export */}
+                            <button onClick={() => setIsImportModalOpen(true)} className="p-2 rounded-lg border border-white/10 text-slate-400 hover:bg-white/5" title="Import CSV/JSON">
+                                <Upload className="w-4 h-4" />
+                            </button>
                         </>
                     )}
                 </div>
@@ -534,7 +536,7 @@ function GuestListModule({ tickets, initialFilterStatus, initialFilterType, init
             {isImportModalOpen && <ImportModal close={() => setIsImportModalOpen(false)} currentUser={currentUser} />}
 
             {/* List */}
-            <div className="bg-slate-900/40 border border-white/5 rounded-2xl overflow-hidden">
+            <div className="bg-slate-900/40 border border-white/5 rounded-2xl overflow-hidden relative z-10">
                 <table className="w-full text-left text-sm text-slate-400">
                   <thead className="bg-white/5 text-slate-200 uppercase text-xs">
                     <tr>
@@ -938,4 +940,4 @@ function StatusDot({ action }) {
     'CONFIG_CHANGE': 'bg-amber-500', 'FACTORY_RESET': 'bg-red-500'
   };
   return <div className={`w-2 h-2 rounded-full mt-1.5 ${colors[action] || 'bg-slate-500'}`}></div>;
-}
+} 
