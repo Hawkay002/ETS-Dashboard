@@ -6,9 +6,9 @@ import {
   BarChart, Bar, XAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell 
 } from 'recharts';
 import { 
-  LayoutDashboard, Users, Activity, Settings, Search, Shield, Ticket, 
+  LayoutDashboard, Users, Logs, Settings, Search, Shield, Ticket, 
   UserCheck, Clock, Lock, LogOut, Menu, X, ChevronRight, Smartphone, LogIn,
-  Filter, Download, Upload, Trash2, MoreVertical, CheckSquare, Square, Crown, FileText, ChevronDown
+  Filter, Download, Upload, Trash2, MoreVertical, CheckSquare, Square, Crown, FileText, ChevronDown, X as CloseIcon
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
@@ -195,7 +195,7 @@ function DashboardLayout({ user }) {
         <nav className="flex-1 p-4 space-y-2">
           <DesktopNavItem icon={LayoutDashboard} label="Overview" active={activeTab === 'overview'} onClick={() => setActiveTab('overview')} />
           <DesktopNavItem icon={Users} label="Guests" active={activeTab === 'guests'} onClick={() => setActiveTab('guests')} />
-          <DesktopNavItem icon={Activity} label="Logs" active={activeTab === 'logs'} onClick={() => setActiveTab('logs')} />
+          <DesktopNavItem icon={Logs} label="Logs" active={activeTab === 'logs'} onClick={() => setActiveTab('logs')} />
           <DesktopNavItem icon={Settings} label="Config" active={activeTab === 'settings'} onClick={() => setActiveTab('settings')} />
         </nav>
       </aside>
@@ -318,7 +318,7 @@ function DashboardLayout({ user }) {
       <nav className="md:hidden fixed bottom-0 w-full h-16 bg-slate-900/90 backdrop-blur-lg border-t border-white/10 flex justify-around items-center px-2 z-40 safe-area-pb">
         <MobileNavItem icon={LayoutDashboard} label="Home" active={activeTab === 'overview'} onClick={() => setActiveTab('overview')} />
         <MobileNavItem icon={Users} label="Guests" active={activeTab === 'guests'} onClick={() => setActiveTab('guests')} />
-        <MobileNavItem icon={Activity} label="Logs" active={activeTab === 'logs'} onClick={() => setActiveTab('logs')} />
+        <MobileNavItem icon={Logs} label="Logs" active={activeTab === 'logs'} onClick={() => setActiveTab('logs')} />
         <MobileNavItem icon={Settings} label="Config" active={activeTab === 'settings'} onClick={() => setActiveTab('settings')} />
       </nav>
     </div>
@@ -333,7 +333,11 @@ function GuestListModule({ tickets, initialFilterStatus, initialFilterType, init
     const [selectedIds, setSelectedIds] = useState(new Set());
     const [isSelectionMode, setIsSelectionMode] = useState(false);
     const [isImportModalOpen, setIsImportModalOpen] = useState(false);
-    const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
+    
+    // EXPORT MODAL STATE
+    const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+    const [exportFormat, setExportFormat] = useState('xlsx');
+    const [exportFileName, setExportFileName] = useState('');
 
     // -- Filter Logic --
     const filteredTickets = useMemo(() => {
@@ -390,9 +394,15 @@ function GuestListModule({ tickets, initialFilterStatus, initialFilterType, init
         setIsSelectionMode(false);
     };
 
+    // -- OPEN EXPORT MODAL --
+    const openExportModal = () => {
+        setExportFileName(`GuestList_Selected_${new Date().toISOString().split('T')[0]}`);
+        setIsExportModalOpen(true);
+    };
+
     // -- EXPORT HANDLER (Full Schema) --
-    const handleExport = async (format) => {
-        setIsExportMenuOpen(false);
+    const handleExportProcess = async () => {
+        setIsExportModalOpen(false);
         const exportSubset = tickets.filter(t => selectedIds.has(t.id));
         if (exportSubset.length === 0) return;
 
@@ -419,10 +429,10 @@ function GuestListModule({ tickets, initialFilterStatus, initialFilterType, init
             };
         });
 
-        const fileName = `GuestList_Selected_${new Date().toISOString().split('T')[0]}`;
+        const fileName = exportFileName || `GuestList`;
         const fields = ['s_no', 'ticket_type', 'id', 'age', 'scannedAt', 'status', 'phone', 'ticketType', 'createdAt', 'gender', 'name', 'createdBy', 'scanned', 'scannedBy'];
 
-        switch (format) {
+        switch (exportFormat) {
             case 'json': {
                 const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
                 saveAs(blob, `${fileName}.json`);
@@ -453,7 +463,7 @@ function GuestListModule({ tickets, initialFilterStatus, initialFilterType, init
             case 'pdf': {
                 const doc = new jsPDF('l', 'mm', 'a4');
                 doc.setFontSize(8);
-                doc.text("Guest List Data Export", 14, 15);
+                doc.text(fileName, 14, 15);
                 const rows = data.map(row => Object.values(row).map(v => String(v)));
                 doc.autoTable({
                     head: [fields],
@@ -488,7 +498,7 @@ function GuestListModule({ tickets, initialFilterStatus, initialFilterType, init
                     sections: [{
                         properties: {},
                         children: [
-                            new Paragraph({ text: "Guest List Data Export", heading: HeadingLevel.HEADING_1 }),
+                            new Paragraph({ text: fileName, heading: HeadingLevel.HEADING_1 }),
                             new Table({
                                 rows: [headerRow, ...dataRows],
                                 width: { size: 100, type: WidthType.PERCENTAGE },
@@ -517,15 +527,15 @@ function GuestListModule({ tickets, initialFilterStatus, initialFilterType, init
                     </div>
                 </div>
                 
-                {/* ROW 2: Filters & Select (Centered) */}
-                <div className="flex gap-2 w-full justify-center flex-wrap items-center">
-                    <select value={initialFilterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="bg-slate-950 border border-white/10 rounded-lg text-xs px-3 py-2 text-slate-300 focus:outline-none">
+                {/* ROW 2: Filters & Select (Full Width & Equal Height) */}
+                <div className="flex flex-col sm:flex-row gap-2 w-full">
+                    <select value={initialFilterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="bg-slate-950 border border-white/10 rounded-xl text-sm px-3 py-2.5 text-slate-300 focus:outline-none flex-1">
                         <option value="all">All Status</option>
                         <option value="arrived">Arrived</option>
                         <option value="coming-soon">Pending</option>
                         <option value="absent">Absent</option>
                     </select>
-                    <select value={initialFilterType} onChange={(e) => setFilterType(e.target.value)} className="bg-slate-950 border border-white/10 rounded-lg text-xs px-3 py-2 text-slate-300 focus:outline-none">
+                    <select value={initialFilterType} onChange={(e) => setFilterType(e.target.value)} className="bg-slate-950 border border-white/10 rounded-xl text-sm px-3 py-2.5 text-slate-300 focus:outline-none flex-1">
                         <option value="all">All Types</option>
                         <option value="Classic">Classic</option>
                         <option value="Diamond">VIP</option>
@@ -533,60 +543,92 @@ function GuestListModule({ tickets, initialFilterStatus, initialFilterType, init
                         <option value="Special">Special (Grouped)</option>
                     </select>
                     
-                    {/* Delete Button (Always Visible, disabled if 0 selected, BEFORE Select) */}
-                    <button 
-                        onClick={handleDelete} 
-                        disabled={selectedIds.size === 0} 
-                        className={`p-2 rounded-lg border transition-all ${
-                            selectedIds.size > 0 
-                            ? 'border-red-500/20 bg-red-500/10 text-red-400 hover:bg-red-500/20 cursor-pointer' 
-                            : 'border-white/5 text-slate-600 opacity-50 cursor-not-allowed'
-                        }`}
-                    >
-                        <Trash2 className="w-4 h-4" />
-                    </button>
+                    <div className="flex gap-2 justify-end">
+                        {/* Delete Button (Always Visible, disabled if 0 selected, BEFORE Select) */}
+                        <button 
+                            onClick={handleDelete} 
+                            disabled={selectedIds.size === 0} 
+                            className={`p-2.5 rounded-xl border transition-all w-12 flex items-center justify-center ${
+                                selectedIds.size > 0 
+                                ? 'border-red-500/20 bg-red-500/10 text-red-400 hover:bg-red-500/20 cursor-pointer' 
+                                : 'border-white/5 text-slate-600 opacity-50 cursor-not-allowed'
+                            }`}
+                        >
+                            <Trash2 className="w-5 h-5" />
+                        </button>
 
-                    {/* Select Button */}
-                    <button onClick={toggleSelectionMode} className={`p-2 rounded-lg border ${isSelectionMode ? 'bg-blue-600 border-blue-600 text-white' : 'border-white/10 text-slate-400'}`}>
-                        <CheckSquare className="w-4 h-4" />
-                    </button>
+                        {/* Select Button */}
+                        <button onClick={toggleSelectionMode} className={`p-2.5 rounded-xl border w-12 flex items-center justify-center ${isSelectionMode ? 'bg-blue-600 border-blue-600 text-white' : 'border-white/10 text-slate-400'}`}>
+                            <CheckSquare className="w-5 h-5" />
+                        </button>
+                    </div>
                 </div>
 
                 {/* ROW 3: Import / Export (Centered) */}
                 <div className="flex flex-wrap gap-3 border-t border-white/5 pt-4 justify-center">
                      
                      {/* IMPORT BUTTON */}
-                     <button onClick={() => setIsImportModalOpen(true)} className="flex items-center gap-2 px-4 py-2 rounded-lg border border-white/10 text-slate-300 hover:bg-white/5 text-sm font-medium transition-colors">
+                     <button onClick={() => setIsImportModalOpen(true)} className="flex items-center gap-2 px-6 py-2.5 rounded-xl border border-white/10 text-slate-300 hover:bg-white/5 text-sm font-medium transition-colors">
                         <Upload className="w-4 h-4" />
                         <span>Import Data</span>
                      </button>
 
                      {/* EXPORT BUTTON */}
-                     <div className="relative">
-                        <button 
-                            disabled={selectedIds.size === 0} 
-                            onClick={() => setIsExportMenuOpen(!isExportMenuOpen)} 
-                            className="flex items-center gap-2 px-4 py-2 rounded-lg border border-white/10 text-slate-300 hover:bg-white/5 text-sm font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:bg-transparent"
-                        >
-                            <Download className="w-4 h-4" />
-                            <span>Export Data {selectedIds.size > 0 ? `(${selectedIds.size})` : ''}</span>
-                            <ChevronDown className="w-3 h-3 ml-1 opacity-50" />
-                        </button>
-                        
-                        {isExportMenuOpen && (
-                            <div className="absolute top-full mt-2 left-1/2 -translate-x-1/2 w-40 bg-slate-900 border border-white/10 rounded-xl shadow-2xl z-50 overflow-hidden flex flex-col p-1 animate-in fade-in zoom-in-95 duration-200">
-                                {['json','csv','xlsx','docx','txt','pdf'].map(fmt => (
-                                    <button key={fmt} onClick={() => handleExport(fmt)} className="px-3 py-2 text-xs text-left text-slate-300 hover:bg-white/10 rounded uppercase font-medium flex items-center justify-between group">
-                                        <span>.{fmt}</span>
-                                        <Download className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity text-blue-400" />
-                                    </button>
-                                ))}
-                            </div>
-                        )}
-                     </div>
+                     <button 
+                        disabled={selectedIds.size === 0} 
+                        onClick={openExportModal}
+                        className="flex items-center gap-2 px-6 py-2.5 rounded-xl border border-white/10 text-slate-300 hover:bg-white/5 text-sm font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:bg-transparent"
+                    >
+                        <Download className="w-4 h-4" />
+                        <span>Export Data {selectedIds.size > 0 ? `(${selectedIds.size})` : ''}</span>
+                    </button>
 
                 </div>
             </div>
+
+            {/* Export Modal */}
+            {isExportModalOpen && (
+                <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm animate-in fade-in">
+                    <div className="bg-slate-900 border border-white/10 rounded-2xl p-6 w-full max-w-sm shadow-2xl relative">
+                        <button onClick={() => setIsExportModalOpen(false)} className="absolute top-4 right-4 text-slate-500 hover:text-white"><CloseIcon className="w-5 h-5" /></button>
+                        
+                        <h3 className="text-lg font-medium text-white mb-1">Export Data</h3>
+                        <p className="text-sm text-slate-500 mb-6">Exporting <span className="text-blue-400 font-bold">{selectedIds.size}</span> selected guests.</p>
+                        
+                        <div className="space-y-4">
+                            <div className="space-y-1">
+                                <label className="text-xs uppercase text-slate-500 font-semibold ml-1">Filename</label>
+                                <input 
+                                    type="text" 
+                                    value={exportFileName}
+                                    onChange={(e) => setExportFileName(e.target.value)}
+                                    className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-sm text-white focus:outline-none focus:border-blue-500 transition-colors"
+                                />
+                            </div>
+
+                            <div className="space-y-1">
+                                <label className="text-xs uppercase text-slate-500 font-semibold ml-1">Format</label>
+                                <div className="grid grid-cols-3 gap-2">
+                                    {['xlsx', 'csv', 'json', 'pdf', 'docx', 'txt'].map(fmt => (
+                                        <button 
+                                            key={fmt}
+                                            onClick={() => setExportFormat(fmt)}
+                                            className={`py-2 rounded-lg text-xs font-medium uppercase border transition-all ${exportFormat === fmt ? 'bg-blue-600 border-blue-500 text-white' : 'bg-white/5 border-white/5 text-slate-400 hover:bg-white/10'}`}
+                                        >
+                                            {fmt}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="flex gap-3 mt-8">
+                            <button onClick={() => setIsExportModalOpen(false)} className="flex-1 py-2.5 rounded-xl border border-white/10 text-slate-400 text-sm hover:bg-white/5 transition-colors">Cancel</button>
+                            <button onClick={handleExportProcess} className="flex-1 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-medium hover:bg-blue-500 transition-all shadow-lg shadow-blue-900/20">Download</button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Import Modal */}
             {isImportModalOpen && <ImportModal close={() => setIsImportModalOpen(false)} currentUser={currentUser} />}
@@ -709,13 +751,13 @@ function LogsModule({ logs }) {
                         className="w-full bg-slate-950 border border-white/10 rounded-xl py-2 pl-10 pr-4 text-sm focus:outline-none focus:border-blue-500 text-white" />
                 </div>
                 
-                {/* RIGHT SIDE: Action Controls (Single Line) */}
+                {/* RIGHT SIDE: Action Controls (Full Width on Mobile, Single Line) */}
                 <div className="flex gap-2 items-center w-full md:w-auto">
-                    {/* Dropdown - Thick, Expanding */}
+                    {/* Dropdown - Expands to fill gap */}
                     <select 
                         value={filter} 
                         onChange={(e) => setFilter(e.target.value)} 
-                        className="bg-slate-950 border border-white/10 rounded-xl text-sm px-4 py-2 text-slate-300 focus:outline-none flex-1 md:w-48"
+                        className="bg-slate-950 border border-white/10 rounded-xl text-sm px-4 py-2 text-slate-300 focus:outline-none flex-1 md:flex-initial md:w-36 h-[42px]"
                     >
                         <option value="all">All Actions</option>
                         <option value="LOGIN">Login</option>
@@ -728,18 +770,18 @@ function LogsModule({ logs }) {
                     <button 
                         onClick={handleDelete} 
                         disabled={selectedIds.size === 0} 
-                        className={`p-2 rounded-lg border transition-all ${
+                        className={`p-2.5 rounded-xl border transition-all w-12 flex items-center justify-center h-[42px] ${
                             selectedIds.size > 0 
                             ? 'border-red-500/20 bg-red-500/10 text-red-400 cursor-pointer' 
                             : 'border-white/5 text-slate-600 opacity-50 cursor-not-allowed'
                         }`}
                     >
-                        <Trash2 className="w-4 h-4" />
+                        <Trash2 className="w-5 h-5" />
                     </button>
 
                     {/* Select Button */}
-                    <button onClick={toggleSelectionMode} className={`p-2 rounded-lg border ${isSelectionMode ? 'bg-blue-600 border-blue-600 text-white' : 'border-white/10 text-slate-400'}`}>
-                        <CheckSquare className="w-4 h-4" />
+                    <button onClick={toggleSelectionMode} className={`p-2.5 rounded-xl border w-12 flex items-center justify-center h-[42px] ${isSelectionMode ? 'bg-blue-600 border-blue-600 text-white' : 'border-white/10 text-slate-400'}`}>
+                        <CheckSquare className="w-5 h-5" />
                     </button>
                 </div>
             </div>
