@@ -610,7 +610,7 @@ function GuestListModule({ tickets, initialFilterStatus, initialFilterType, init
                                </div>
                             </td>
                             <td className="p-4 text-xs font-mono text-slate-500">{t.scannedBy || '-'}</td>
-                            <td className="p-4 text-right font-mono text-xs opacity-50">{t.id.substring(0,6)}</td>
+                            <td className="p-4 text-right font-mono text-xs opacity-50 select-all cursor-text">{t.id}</td>
                           </tr>
                         ))}
                       </tbody>
