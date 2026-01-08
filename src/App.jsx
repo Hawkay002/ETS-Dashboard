@@ -1,14 +1,14 @@
 import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from 'firebase/auth';
-import { getFirestore, collection, onSnapshot, query, orderBy, doc, deleteDoc, writeBatch, updateDoc, setDoc, where, getDocs } from 'firebase/firestore';
+import { getFirestore, collection, onSnapshot, query, orderBy, doc, deleteDoc, writeBatch, updateDoc, setDoc, where, getDocs, getDoc } from 'firebase/firestore';
 import { 
   BarChart, Bar, XAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell 
 } from 'recharts';
 import { 
   LayoutDashboard, Users, Logs, Settings, Search, Shield, Ticket, 
   UserCheck, Clock, Lock, LogOut, Menu, X, ChevronRight, Smartphone, LogIn,
-  Filter, Download, Upload, Trash2, MoreVertical, CheckSquare, Square, Crown, FileText, ChevronDown, X as CloseIcon, Terminal, Copy, Play, Save, Edit2, CheckCircle, AlertCircle
+  Filter, Download, Upload, Trash2, MoreVertical, CheckSquare, Square, Crown, FileText, ChevronDown, X as CloseIcon, Terminal, Copy, Play, Save, Edit2, CheckCircle, AlertCircle, Wifi, WifiOff, Unlock, KeyRound
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
@@ -35,6 +35,7 @@ const auth = getAuth(app);
 const APP_COLLECTION_ROOT = 'ticket_events_data';
 const SHARED_DATA_ID = 'shared_event_db';
 const ADMIN_EMAIL = 'admin.test@gmail.com'; 
+const ADMIN_PASSWORD = '123456'; // Preset password for locking/unlocking
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -123,6 +124,11 @@ function DashboardLayout({ user }) {
   const [tickets, setTickets] = useState([]);
   const [logs, setLogs] = useState([]);
   const [settings, setSettings] = useState(null);
+  
+  // Data for Staff Status
+  const [staffList, setStaffList] = useState([]);
+  const [locks, setLocks] = useState({});
+
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   
   // SHARED FILTER STATES
@@ -141,7 +147,17 @@ function DashboardLayout({ user }) {
     const unsubSettings = onSnapshot(doc(db, APP_COLLECTION_ROOT, SHARED_DATA_ID, 'settings', 'config'), 
       (doc) => doc.exists() && setSettings(doc.data()));
 
-    return () => { unsubTickets(); unsubLogs(); unsubSettings(); };
+    // Fetch Staff & Locks
+    const unsubStaff = onSnapshot(collection(db, 'allowed_usernames'), (snap) => {
+        setStaffList(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    });
+    const unsubLocks = onSnapshot(collection(db, 'global_locks'), (snap) => {
+        const lockMap = {};
+        snap.docs.forEach(d => lockMap[d.id] = d.data());
+        setLocks(lockMap);
+    });
+
+    return () => { unsubTickets(); unsubLogs(); unsubSettings(); unsubStaff(); unsubLocks(); };
   }, []);
 
   const stats = useMemo(() => ({
@@ -196,6 +212,7 @@ function DashboardLayout({ user }) {
           <DesktopNavItem icon={LayoutDashboard} label="Overview" active={activeTab === 'overview'} onClick={() => setActiveTab('overview')} />
           <DesktopNavItem icon={Users} label="Guests" active={activeTab === 'guests'} onClick={() => setActiveTab('guests')} />
           <DesktopNavItem icon={Logs} label="Logs" active={activeTab === 'logs'} onClick={() => setActiveTab('logs')} />
+          <DesktopNavItem icon={Shield} label="Admin Control" active={activeTab === 'admin'} onClick={() => setActiveTab('admin')} />
           <DesktopNavItem icon={Terminal} label="Console" active={activeTab === 'console'} onClick={() => setActiveTab('console')} />
           <DesktopNavItem icon={Settings} label="Config" active={activeTab === 'settings'} onClick={() => setActiveTab('settings')} />
         </nav>
@@ -267,7 +284,53 @@ function DashboardLayout({ user }) {
                   </div>
                 </div>
 
-                <div className="bg-slate-900/40 border border-white/5 rounded-2xl p-5 shadow-sm flex flex-col">
+                {/* NEW: STAFF STATUS CARD */}
+                <div className="bg-slate-900/40 border border-white/5 rounded-2xl p-5 shadow-sm flex flex-col h-full">
+                    <div className="flex justify-between items-center mb-4">
+                        <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Staff Status</h3>
+                        <button onClick={() => setActiveTab('admin')} className="text-xs text-blue-400 hover:text-blue-300">View All</button>
+                    </div>
+                    
+                    <div className="flex-1 overflow-y-auto space-y-4 pr-1">
+                        {['Event Manager', 'Registration Desk', 'Security Head'].map(role => {
+                            const staffInRole = staffList.filter(s => s.role === role);
+                            if(staffInRole.length === 0) return null;
+                            return (
+                                <div key={role}>
+                                    <div className="text-[10px] uppercase text-slate-600 font-bold mb-2">{role}</div>
+                                    <div className="space-y-2">
+                                        {staffInRole.map(s => {
+                                            const isLocked = locks[s.id] && locks[s.id].lockedTabs && locks[s.id].lockedTabs.length > 0;
+                                            return (
+                                                <div key={s.id} className="flex items-center justify-between p-2 rounded-lg bg-white/5 border border-white/5">
+                                                    <div className="flex items-center gap-2">
+                                                        <div className="relative">
+                                                            <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]"></div>
+                                                        </div>
+                                                        <div>
+                                                            <div className="text-xs text-white font-medium">{s.realName || s.name || s.id}</div>
+                                                            <div className="text-[9px] text-slate-500">{s.id}</div>
+                                                        </div>
+                                                    </div>
+                                                    {isLocked && (
+                                                        <div className="flex items-center gap-1 text-[9px] text-red-400 bg-red-500/10 px-2 py-0.5 rounded border border-red-500/20">
+                                                            <Lock className="w-3 h-3" />
+                                                            <span>Locked</span>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+              </div>
+
+              {/* Activity Feed (Now pushed down) */}
+              <div className="bg-slate-900/40 border border-white/5 rounded-2xl p-5 shadow-sm flex flex-col">
                   <div className="flex justify-between items-center mb-4">
                     <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Activity Feed</h3>
                     <button onClick={() => setActiveTab('logs')} className="text-xs text-blue-400">View All</button>
@@ -283,7 +346,6 @@ function DashboardLayout({ user }) {
                       </div>
                     ))}
                   </div>
-                </div>
               </div>
             </div>
           )}
@@ -307,6 +369,11 @@ function DashboardLayout({ user }) {
              <LogsModule logs={logs} />
           )}
 
+          {/* TAB: ADMIN CONTROL (NEW) */}
+          {activeTab === 'admin' && (
+             <AdminControlPanelFull staffList={staffList} locks={locks} currentUser={user} />
+          )}
+
           {/* TAB: CONSOLE */}
           {activeTab === 'console' && (
              <ConsoleModule currentUser={user} />
@@ -325,7 +392,7 @@ function DashboardLayout({ user }) {
         <MobileNavItem icon={LayoutDashboard} label="Home" active={activeTab === 'overview'} onClick={() => setActiveTab('overview')} />
         <MobileNavItem icon={Users} label="Guests" active={activeTab === 'guests'} onClick={() => setActiveTab('guests')} />
         <MobileNavItem icon={Logs} label="Logs" active={activeTab === 'logs'} onClick={() => setActiveTab('logs')} />
-        <MobileNavItem icon={Terminal} label="Console" active={activeTab === 'console'} onClick={() => setActiveTab('console')} />
+        <MobileNavItem icon={Shield} label="Admin" active={activeTab === 'admin'} onClick={() => setActiveTab('admin')} />
         <MobileNavItem icon={Settings} label="Config" active={activeTab === 'settings'} onClick={() => setActiveTab('settings')} />
       </nav>
     </div>
@@ -333,161 +400,250 @@ function DashboardLayout({ user }) {
 }
 
 // ===========================================
-// SUB-MODULE: CONSOLE (Power User)
+// SUB-MODULE: ADMIN CONTROL PANEL (FULL)
 // ===========================================
-function ConsoleModule({ currentUser }) {
-    const [formData, setFormData] = useState({ username: '', name: '', role: 'Event Manager' });
-    const [terminalLines, setTerminalLines] = useState([
-        { type: 'info', text: 'System Console v1.0.3 Ready...' },
-        { type: 'info', text: 'Connected to Firestore Instance.' }
-    ]);
-    const [currentCommand, setCurrentCommand] = useState('');
-    const bottomRef = useRef(null);
+function AdminControlPanelFull({ staffList, locks, currentUser }) {
+    const [selectedUserIds, setSelectedUserIds] = useState(new Set());
+    const [lockConfig, setLockConfig] = useState({
+        create: false,
+        booked: false,
+        scanner: false,
+        reason: '',
+        password: ''
+    });
+    const [statusMsg, setStatusMsg] = useState(null);
 
-    const generateCommand = () => {
-        if(!formData.username || !formData.name) return;
-        const cmd = `createStaffUser("${formData.username}", "${formData.name}", "${formData.role}")`;
-        setCurrentCommand(cmd);
+    // Grouping
+    const groups = ['Event Manager', 'Registration Desk', 'Security Head'];
+
+    // Selection Logic
+    const toggleSelect = (id) => {
+        const newSet = new Set(selectedUserIds);
+        if (newSet.has(id)) newSet.delete(id); else newSet.add(id);
+        setSelectedUserIds(newSet);
+        
+        // Auto-fill lock status from first selected user (convenience)
+        if (!newSet.has(id) && newSet.size > 0) {
+             // deselected, do nothing or check others
+        } else if (newSet.size === 1) {
+             const userLock = locks[id];
+             if (userLock) {
+                 setLockConfig(prev => ({
+                     ...prev,
+                     create: userLock.lockedTabs?.includes('create') || false,
+                     booked: userLock.lockedTabs?.includes('booked') || false,
+                     scanner: userLock.lockedTabs?.includes('scanner') || false,
+                     reason: userLock.reason || ''
+                 }));
+             }
+        }
     };
 
-    const runCommand = async () => {
-        if(!currentCommand) return;
+    const toggleSelectGroup = (role) => {
+        const usersInRole = staffList.filter(s => s.role === role);
+        const ids = usersInRole.map(u => u.id);
         
-        setTerminalLines(prev => [...prev, { type: 'input', text: `> ${currentCommand}` }]);
+        const allSelected = ids.every(id => selectedUserIds.has(id));
+        const newSet = new Set(selectedUserIds);
         
-        const regex = /createStaffUser\s*\(\s*"([^"]+)"\s*,\s*"([^"]+)"\s*,\s*"([^"]+)"\s*\)/;
-        const match = currentCommand.match(regex);
-
-        if(match) {
-            const [_, username, realName, role] = match;
-            
-            // --- EXACT LOGIC FROM YOUR SNIPPET ---
-            let targetEmail = "";
-            const roleLower = role.toLowerCase();
-            if (roleLower.includes('event')) targetEmail = "eveman.test@gmail.com";
-            else if (roleLower.includes('reg')) targetEmail = "regdesk.test@gmail.com";
-            else if (roleLower.includes('sec')) targetEmail = "sechead.test@gmail.com";
-            else {
-                setTerminalLines(prev => [...prev, { type: 'error', text: `x Error: Unknown role. Use 'Event Manager', 'Registration Desk', or 'Security Head'` }]);
-                setCurrentCommand('');
-                return;
-            }
-
-            try {
-                await setDoc(doc(db, 'allowed_usernames', username), {
-                    realName: realName,
-                    role: role,
-                    email: targetEmail,
-                    createdAt: Date.now()
-                });
-                setTerminalLines(prev => [...prev, { type: 'success', text: `✓ SUCCESS: User '${username}' created for ${targetEmail}` }]);
-            } catch (err) {
-                setTerminalLines(prev => [...prev, { type: 'error', text: `x Error: ${err.message}` }]);
-            }
+        if (allSelected) {
+            ids.forEach(id => newSet.delete(id));
         } else {
-            setTerminalLines(prev => [...prev, { type: 'error', text: `x Syntax Error: Unknown command format.` }]);
+            ids.forEach(id => newSet.add(id));
+        }
+        setSelectedUserIds(newSet);
+    };
+
+    // Derived State
+    const isAnySelectedLocked = Array.from(selectedUserIds).some(id => locks[id] && locks[id].lockedTabs && locks[id].lockedTabs.length > 0);
+
+    const handleAction = async () => {
+        if (lockConfig.password !== ADMIN_PASSWORD) {
+            setStatusMsg({ type: 'error', text: 'Incorrect Admin Password' });
+            return;
         }
 
-        setCurrentCommand(''); 
-        setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
-    };
+        const batch = writeBatch(db);
+        const timestamp = Date.now();
 
-    const copyToClipboard = () => {
-        if(currentCommand) {
-            navigator.clipboard.writeText(currentCommand);
+        try {
+            selectedUserIds.forEach(id => {
+                const ref = doc(db, 'global_locks', id);
+                if (isAnySelectedLocked) {
+                    // UNLOCK ACTION
+                    batch.set(ref, { lockedTabs: [], reason: '', unlockedBy: currentUser.email, updatedAt: timestamp }, { merge: true });
+                } else {
+                    // LOCK ACTION
+                    const tabsToLock = [];
+                    if (lockConfig.create) tabsToLock.push('create');
+                    if (lockConfig.booked) tabsToLock.push('booked');
+                    if (lockConfig.scanner) tabsToLock.push('scanner');
+                    
+                    if (tabsToLock.length === 0) {
+                        throw new Error("Select at least one tab to lock");
+                    }
+
+                    batch.set(ref, {
+                        lockedTabs: tabsToLock,
+                        reason: lockConfig.reason,
+                        lockedBy: currentUser.email,
+                        updatedAt: timestamp
+                    }, { merge: true });
+                }
+            });
+
+            await batch.commit();
+            setStatusMsg({ type: 'success', text: isAnySelectedLocked ? 'Users Unlocked' : 'Users Locked' });
+            setLockConfig(prev => ({ ...prev, password: '' })); // Clear password
+            setSelectedUserIds(new Set()); // Reset selection
+        } catch (e) {
+            setStatusMsg({ type: 'error', text: e.message });
         }
     };
 
     return (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-[calc(100vh-140px)]">
-            {/* Input Form */}
-            <div className="bg-slate-900/40 border border-white/5 rounded-2xl p-6 h-fit">
-                <h2 className="text-lg font-medium text-white mb-4 flex items-center gap-2">
-                    <Users className="w-5 h-5 text-blue-400" />
-                    New User Parameters
-                </h2>
-                <div className="space-y-4">
-                    <div className="space-y-1">
-                        <label className="text-xs uppercase text-slate-500 font-semibold ml-1">Username (ID)</label>
-                        <input 
-                            type="text" 
-                            value={formData.username}
-                            onChange={e => setFormData({...formData, username: e.target.value})}
-                            placeholder="user_id"
-                            className="w-full bg-slate-950 border border-white/10 rounded-xl p-3 text-sm text-white focus:outline-none focus:border-blue-500"
-                        />
-                    </div>
-                    <div className="space-y-1">
-                        <label className="text-xs uppercase text-slate-500 font-semibold ml-1">Staff Name</label>
-                        <input 
-                            type="text" 
-                            value={formData.name}
-                            onChange={e => setFormData({...formData, name: e.target.value})}
-                            placeholder="John Doe"
-                            className="w-full bg-slate-950 border border-white/10 rounded-xl p-3 text-sm text-white focus:outline-none focus:border-blue-500"
-                        />
-                    </div>
-                    <div className="space-y-1">
-                        <label className="text-xs uppercase text-slate-500 font-semibold ml-1">Role</label>
-                        <select 
-                            value={formData.role}
-                            onChange={e => setFormData({...formData, role: e.target.value})}
-                            className="w-full bg-slate-950 border border-white/10 rounded-xl p-3 text-sm text-white focus:outline-none focus:border-blue-500"
-                        >
-                            <option value="Event Manager">Event Manager</option>
-                            <option value="Registration Desk">Registration Desk</option>
-                            <option value="Security Head">Security Head</option>
-                        </select>
-                    </div>
-                    
-                    <button 
-                        onClick={generateCommand}
-                        disabled={!formData.username || !formData.name}
-                        className="w-full py-3 rounded-xl bg-blue-600 text-white font-medium hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed mt-4 transition-colors"
-                    >
-                        Generate Command
-                    </button>
-                </div>
+            {/* LEFT: User Lists */}
+            <div className="lg:col-span-2 overflow-y-auto space-y-6 pr-2">
+                {groups.map(role => {
+                    const users = staffList.filter(s => s.role === role);
+                    if (users.length === 0) return null;
+                    const allSelected = users.every(u => selectedUserIds.has(u.id));
+
+                    return (
+                        <div key={role} className="bg-slate-900/40 border border-white/5 rounded-2xl overflow-hidden">
+                            <div className="px-4 py-3 bg-white/5 border-b border-white/5 flex justify-between items-center">
+                                <h3 className="font-semibold text-sm text-white uppercase tracking-wider">{role}</h3>
+                                <button 
+                                    onClick={() => toggleSelectGroup(role)}
+                                    className="text-xs text-blue-400 hover:text-blue-300"
+                                >
+                                    {allSelected ? 'Deselect All' : 'Select All'}
+                                </button>
+                            </div>
+                            <div className="divide-y divide-white/5">
+                                {users.map(u => {
+                                    const isSelected = selectedUserIds.has(u.id);
+                                    const userLock = locks[u.id];
+                                    const isLocked = userLock && userLock.lockedTabs && userLock.lockedTabs.length > 0;
+
+                                    return (
+                                        <div 
+                                            key={u.id} 
+                                            onClick={() => toggleSelect(u.id)}
+                                            className={`p-3 flex items-center justify-between cursor-pointer transition-colors ${isSelected ? 'bg-blue-500/10' : 'hover:bg-white/5'}`}
+                                        >
+                                            <div className="flex items-center gap-3">
+                                                <div className={`w-4 h-4 rounded border flex items-center justify-center ${isSelected ? 'bg-blue-500 border-blue-500' : 'border-white/20'}`}>
+                                                    {isSelected && <CheckSquare className="w-3 h-3 text-white" />}
+                                                </div>
+                                                <div>
+                                                    <div className="text-sm font-medium text-white">{u.realName || u.name}</div>
+                                                    <div className="text-xs text-slate-500">{u.id}</div>
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center gap-3">
+                                                {/* Online Status (Mocked/Active Session Check) */}
+                                                <div className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-black/20 border border-white/5">
+                                                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_5px_#10b981]"></div>
+                                                    <span className="text-[10px] text-slate-400">Online</span>
+                                                </div>
+                                                {isLocked && (
+                                                    <div className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-red-500/10 border border-red-500/20 text-red-400">
+                                                        <Lock className="w-3 h-3" />
+                                                        <span className="text-[10px] font-bold">LOCKED</span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    );
+                })}
             </div>
 
-            {/* Terminal Output */}
-            <div className="lg:col-span-2 bg-black border border-white/10 rounded-2xl flex flex-col overflow-hidden shadow-2xl font-mono text-sm relative">
-                {/* Terminal Header */}
-                <div className="bg-slate-900/80 border-b border-white/10 px-4 py-2 flex items-center gap-2">
-                    <Terminal className="w-4 h-4 text-emerald-500" />
-                    <span className="text-slate-400 text-xs">admin@dashboard:~/console</span>
-                </div>
-
-                {/* Terminal Body */}
-                <div className="flex-1 p-4 overflow-y-auto space-y-1 text-slate-300">
-                    {terminalLines.map((line, idx) => (
-                        <div key={idx} className={`${line.type === 'error' ? 'text-red-400' : line.type === 'success' ? 'text-emerald-400' : line.type === 'input' ? 'text-white font-bold' : 'text-slate-500'}`}>
-                            {line.text}
-                        </div>
-                    ))}
-                    <div ref={bottomRef} />
-                </div>
-
-                {/* Active Input Line */}
-                <div className="bg-slate-900/50 p-4 border-t border-white/10 flex items-center gap-3">
-                    <span className="text-emerald-500 font-bold">{">"}</span>
-                    <input 
-                        type="text" 
-                        value={currentCommand}
-                        onChange={e => setCurrentCommand(e.target.value)}
-                        onKeyDown={e => e.key === 'Enter' && runCommand()}
-                        className="flex-1 bg-transparent border-none outline-none text-white placeholder:text-slate-700"
-                        placeholder="Waiting for command..."
-                    />
-                    
-                    <div className="flex items-center gap-1">
-                        <button onClick={copyToClipboard} title="Copy" className="p-2 hover:bg-white/10 rounded text-slate-400 hover:text-white transition-colors">
-                            <Copy className="w-4 h-4" />
-                        </button>
-                        <button onClick={runCommand} title="Run" className="p-2 hover:bg-emerald-500/20 rounded text-emerald-500 transition-colors">
-                            <Play className="w-4 h-4" />
-                        </button>
+            {/* RIGHT: Control Panel */}
+            <div className="bg-slate-900 border border-white/10 rounded-2xl p-6 h-fit sticky top-0 shadow-2xl">
+                <div className="mb-6 flex items-center gap-3 pb-4 border-b border-white/10">
+                    <div className="p-3 bg-blue-500/10 rounded-xl text-blue-400">
+                        <Shield className="w-6 h-6" />
                     </div>
+                    <div>
+                        <h2 className="text-lg font-bold text-white">Access Control</h2>
+                        <p className="text-xs text-slate-500">{selectedUserIds.size} users selected</p>
+                    </div>
+                </div>
+
+                <div className="space-y-5">
+                    {/* Tab Selection */}
+                    <div>
+                        <label className="text-xs uppercase text-slate-500 font-bold mb-3 block">Tabs to Lock</label>
+                        <div className="space-y-2">
+                            {['create', 'booked', 'scanner'].map(tab => (
+                                <label key={tab} className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer transition-all ${lockConfig[tab] ? 'bg-red-500/10 border-red-500/50' : 'bg-black/20 border-white/10 hover:border-white/30'}`}>
+                                    <span className="capitalize text-sm font-medium text-slate-200">{tab} Tab</span>
+                                    <input 
+                                        type="checkbox" 
+                                        checked={lockConfig[tab]} 
+                                        onChange={e => setLockConfig({...lockConfig, [tab]: e.target.checked})}
+                                        className="accent-red-500 w-4 h-4"
+                                        disabled={isAnySelectedLocked} // Disable checkbox modification if trying to unlock
+                                    />
+                                </label>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* Reason */}
+                    <div>
+                        <label className="text-xs uppercase text-slate-500 font-bold mb-1 block">Reason</label>
+                        <input 
+                            type="text" 
+                            value={lockConfig.reason}
+                            onChange={e => setLockConfig({...lockConfig, reason: e.target.value})}
+                            placeholder="e.g. Shift ended, Security breach"
+                            className="w-full bg-black/20 border border-white/10 rounded-xl p-3 text-sm text-white focus:outline-none focus:border-blue-500 transition-colors"
+                            disabled={isAnySelectedLocked}
+                        />
+                    </div>
+
+                    {/* Password */}
+                    <div>
+                        <label className="text-xs uppercase text-slate-500 font-bold mb-1 block">Admin Password</label>
+                        <div className="relative">
+                            <KeyRound className="absolute left-3 top-3 w-4 h-4 text-slate-500" />
+                            <input 
+                                type="password" 
+                                value={lockConfig.password}
+                                onChange={e => setLockConfig({...lockConfig, password: e.target.value})}
+                                placeholder="••••••"
+                                className="w-full bg-black/20 border border-white/10 rounded-xl py-3 pl-10 pr-3 text-sm text-white focus:outline-none focus:border-blue-500 transition-colors"
+                            />
+                        </div>
+                    </div>
+
+                    {/* Action Button */}
+                    <button 
+                        onClick={handleAction}
+                        disabled={selectedUserIds.size === 0 || !lockConfig.password}
+                        className={`w-full py-3.5 rounded-xl font-bold text-sm shadow-lg transition-all flex items-center justify-center gap-2 ${
+                            isAnySelectedLocked 
+                            ? 'bg-emerald-500 hover:bg-emerald-600 text-white shadow-emerald-900/20' 
+                            : 'bg-red-500 hover:bg-red-600 text-white shadow-red-900/20'
+                        } disabled:opacity-50 disabled:cursor-not-allowed`}
+                    >
+                        {isAnySelectedLocked ? <Unlock className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
+                        {isAnySelectedLocked ? 'Unlock Access' : 'Lock Access'}
+                    </button>
+
+                    {/* Status Message */}
+                    {statusMsg && (
+                        <div className={`text-center text-xs font-medium p-2 rounded-lg ${statusMsg.type === 'error' ? 'text-red-400 bg-red-500/10' : 'text-emerald-400 bg-emerald-500/10'}`}>
+                            {statusMsg.text}
+                        </div>
+                    )}
                 </div>
             </div>
         </div>
