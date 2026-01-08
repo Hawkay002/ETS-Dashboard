@@ -8,7 +8,7 @@ import {
 import { 
   LayoutDashboard, Users, Logs, Settings, Search, Shield, Ticket, 
   UserCheck, Clock, Lock, LogOut, Menu, X, ChevronRight, Smartphone, LogIn,
-  Filter, Download, Upload, Trash2, MoreVertical, CheckSquare, Square, Crown, FileText, ChevronDown, X as CloseIcon, Terminal, Copy, Play, Save, Edit2
+  Filter, Download, Upload, Trash2, MoreVertical, CheckSquare, Square, Crown, FileText, ChevronDown, X as CloseIcon, Terminal, Copy, Play, Save, Edit2, CheckCircle, AlertCircle
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
@@ -1033,6 +1033,7 @@ function SettingsModule({ settings, currentUser }) {
     // Edit State
     const [isEditing, setIsEditing] = useState(false);
     const [formData, setFormData] = useState({ name: '', place: '', deadline: '' });
+    const [notification, setNotification] = useState(null); // For Success/Error Toast
 
     useEffect(() => {
         if(settings) {
@@ -1071,31 +1072,69 @@ function SettingsModule({ settings, currentUser }) {
             });
 
             setIsEditing(false);
-            alert("Configuration Updated Successfully!");
+            
+            // Show Success Toast
+            setNotification({ type: 'success', message: 'Configuration updated successfully.' });
+            setTimeout(() => setNotification(null), 3000);
+
         } catch (e) {
             console.error(e);
-            alert("Failed to update config");
+            // Show Error Toast
+            setNotification({ type: 'error', message: 'Failed to update configuration.' });
+            setTimeout(() => setNotification(null), 3000);
+        }
+    };
+
+    const handleCancel = () => {
+        setIsEditing(false);
+        // Reset form to original values
+        if(settings) {
+            setFormData({
+                name: settings.name || '',
+                place: settings.place || '',
+                deadline: settings.deadline ? new Date(settings.deadline).toISOString().slice(0,16) : ''
+            });
         }
     };
 
     return (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 relative">
+            
+            {/* Toast Notification */}
+            {notification && (
+                <div className={`absolute bottom-4 right-4 z-50 flex items-center gap-3 px-4 py-3 rounded-xl border shadow-2xl animate-in slide-in-from-bottom-5 ${notification.type === 'success' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-red-500/10 border-red-500/20 text-red-400'}`}>
+                    {notification.type === 'success' ? <CheckCircle className="w-5 h-5" /> : <AlertCircle className="w-5 h-5" />}
+                    <span className="text-sm font-medium">{notification.message}</span>
+                </div>
+            )}
+
             <div className="bg-slate-900/40 border border-white/5 rounded-2xl p-6">
                <div className="flex justify-between items-center mb-6">
                    <h2 className="text-lg font-medium text-white flex items-center gap-2"><Settings className="w-5 h-5"/> Configuration</h2>
-                   <button 
-                        onClick={() => isEditing ? handleSaveConfig() : setIsEditing(true)}
-                        className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${isEditing ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-white/5 text-slate-400 hover:text-white border border-white/10'}`}
-                   >
-                       {isEditing ? <><Save className="w-3 h-3"/> Save Changes</> : <><Edit2 className="w-3 h-3"/> Edit</>}
-                   </button>
+                   
+                   <div className="flex gap-2">
+                       {isEditing && (
+                           <button 
+                                onClick={handleCancel}
+                                className="px-3 py-1.5 rounded-lg text-xs font-medium bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20 transition-all"
+                           >
+                               Cancel
+                           </button>
+                       )}
+                       <button 
+                            onClick={() => isEditing ? handleSaveConfig() : setIsEditing(true)}
+                            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${isEditing ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20' : 'bg-white/5 text-slate-400 hover:text-white border border-white/10'}`}
+                       >
+                           {isEditing ? <><Save className="w-3 h-3"/> Save Changes</> : <><Edit2 className="w-3 h-3"/> Edit</>}
+                       </button>
+                   </div>
                </div>
                
                <div className="space-y-6">
                  <div className="flex flex-col gap-1 pb-4 border-b border-white/5">
                    <span className="text-xs text-slate-500 uppercase">Event Name</span>
                    {isEditing ? (
-                       <input type="text" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="bg-black/20 border border-white/10 rounded-lg p-2 text-white text-sm focus:border-blue-500 outline-none"/>
+                       <input type="text" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="bg-black/20 border border-white/10 rounded-lg p-2 text-white text-sm focus:border-blue-500 outline-none transition-colors"/>
                    ) : (
                        <span className="text-slate-200 font-medium text-lg">{settings?.name || '--'}</span>
                    )}
@@ -1103,7 +1142,7 @@ function SettingsModule({ settings, currentUser }) {
                  <div className="flex flex-col gap-1 pb-4 border-b border-white/5">
                    <span className="text-xs text-slate-500 uppercase">Venue</span>
                    {isEditing ? (
-                       <input type="text" value={formData.place} onChange={e => setFormData({...formData, place: e.target.value})} className="bg-black/20 border border-white/10 rounded-lg p-2 text-white text-sm focus:border-blue-500 outline-none"/>
+                       <input type="text" value={formData.place} onChange={e => setFormData({...formData, place: e.target.value})} className="bg-black/20 border border-white/10 rounded-lg p-2 text-white text-sm focus:border-blue-500 outline-none transition-colors"/>
                    ) : (
                        <span className="text-slate-200 font-medium">{settings?.place || '--'}</span>
                    )}
@@ -1111,7 +1150,7 @@ function SettingsModule({ settings, currentUser }) {
                  <div className="flex flex-col gap-1">
                    <span className="text-xs text-slate-500 uppercase">Deadline</span>
                    {isEditing ? (
-                       <input type="datetime-local" value={formData.deadline} onChange={e => setFormData({...formData, deadline: e.target.value})} className="bg-black/20 border border-white/10 rounded-lg p-2 text-white text-sm focus:border-blue-500 outline-none invert-calendar-icon"/>
+                       <input type="datetime-local" value={formData.deadline} onChange={e => setFormData({...formData, deadline: e.target.value})} className="bg-black/20 border border-white/10 rounded-lg p-2 text-white text-sm focus:border-blue-500 outline-none invert-calendar-icon transition-colors"/>
                    ) : (
                        <span className="text-slate-200 font-medium">{settings?.deadline ? new Date(settings.deadline).toLocaleString() : 'Not Set'}</span>
                    )}
