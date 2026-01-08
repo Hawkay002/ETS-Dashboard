@@ -518,7 +518,7 @@ function GuestListModule({ tickets, initialFilterStatus, initialFilterType, init
                 </div>
                 
                 {/* ROW 2: Filters & Select (Centered) */}
-                <div className="flex gap-2 w-full justify-center flex-wrap">
+                <div className="flex gap-2 w-full justify-center flex-wrap items-center">
                     <select value={initialFilterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="bg-slate-950 border border-white/10 rounded-lg text-xs px-3 py-2 text-slate-300 focus:outline-none">
                         <option value="all">All Status</option>
                         <option value="arrived">Arrived</option>
@@ -533,16 +533,23 @@ function GuestListModule({ tickets, initialFilterStatus, initialFilterType, init
                         <option value="Special">Special (Grouped)</option>
                     </select>
                     
+                    {/* Delete Button (Always Visible, disabled if 0 selected, BEFORE Select) */}
+                    <button 
+                        onClick={handleDelete} 
+                        disabled={selectedIds.size === 0} 
+                        className={`p-2 rounded-lg border transition-all ${
+                            selectedIds.size > 0 
+                            ? 'border-red-500/20 bg-red-500/10 text-red-400 hover:bg-red-500/20 cursor-pointer' 
+                            : 'border-white/5 text-slate-600 opacity-50 cursor-not-allowed'
+                        }`}
+                    >
+                        <Trash2 className="w-4 h-4" />
+                    </button>
+
+                    {/* Select Button */}
                     <button onClick={toggleSelectionMode} className={`p-2 rounded-lg border ${isSelectionMode ? 'bg-blue-600 border-blue-600 text-white' : 'border-white/10 text-slate-400'}`}>
                         <CheckSquare className="w-4 h-4" />
                     </button>
-                    
-                    {/* Delete Only Visible if Needed */}
-                    {isSelectionMode && selectedIds.size > 0 && (
-                        <button onClick={handleDelete} className="p-2 rounded-lg border border-red-500/20 bg-red-500/10 text-red-400">
-                            <Trash2 className="w-4 h-4" />
-                        </button>
-                    )}
                 </div>
 
                 {/* ROW 3: Import / Export (Centered) */}
@@ -695,24 +702,29 @@ function LogsModule({ logs }) {
         <div className="space-y-4">
             <div className="flex flex-col md:flex-row gap-4 bg-slate-900/40 p-4 rounded-2xl border border-white/5 items-center justify-between">
                 
-                {/* LEFT SIDE: Search + Dropdown */}
-                <div className="flex flex-col sm:flex-row gap-2 flex-1 w-full md:w-auto">
-                   <div className="relative flex-1">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-                        <input type="text" placeholder="Search logs..." value={search} onChange={e => setSearch(e.target.value)}
-                            className="w-full bg-slate-950 border border-white/10 rounded-xl py-2 pl-10 pr-4 text-sm focus:outline-none focus:border-blue-500 text-white" />
-                   </div>
-                   <select value={filter} onChange={(e) => setFilter(e.target.value)} className="bg-slate-950 border border-white/10 rounded-lg text-xs px-3 py-2 text-slate-300 focus:outline-none w-full sm:w-auto">
+                {/* LEFT SIDE: Search */}
+                <div className="relative flex-1 w-full md:w-auto">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                    <input type="text" placeholder="Search logs..." value={search} onChange={e => setSearch(e.target.value)}
+                        className="w-full bg-slate-950 border border-white/10 rounded-xl py-2 pl-10 pr-4 text-sm focus:outline-none focus:border-blue-500 text-white" />
+                </div>
+                
+                {/* RIGHT SIDE: Action Controls (Single Line) */}
+                <div className="flex gap-2 items-center">
+                    {/* Dropdown - Shorter/Narrower */}
+                    <select 
+                        value={filter} 
+                        onChange={(e) => setFilter(e.target.value)} 
+                        className="bg-slate-950 border border-white/10 rounded-lg text-[10px] px-2 py-1.5 text-slate-300 focus:outline-none w-28"
+                    >
                         <option value="all">All Actions</option>
                         <option value="LOGIN">Login</option>
                         <option value="TICKET_CREATE">Ticket Create</option>
                         <option value="SCAN_ENTRY">Scan Entry</option>
                         <option value="CONFIG_CHANGE">Config Change</option>
                     </select>
-                </div>
-                
-                {/* RIGHT SIDE: Delete + Select */}
-                <div className="flex gap-2">
+                    
+                    {/* Delete Button (Always Visible, Disabled by Default, Before Select) */}
                     <button 
                         onClick={handleDelete} 
                         disabled={selectedIds.size === 0} 
@@ -725,6 +737,7 @@ function LogsModule({ logs }) {
                         <Trash2 className="w-4 h-4" />
                     </button>
 
+                    {/* Select Button */}
                     <button onClick={toggleSelectionMode} className={`p-2 rounded-lg border ${isSelectionMode ? 'bg-blue-600 border-blue-600 text-white' : 'border-white/10 text-slate-400'}`}>
                         <CheckSquare className="w-4 h-4" />
                     </button>
