@@ -196,9 +196,8 @@ function DashboardLayout({ user }) {
           <DesktopNavItem icon={LayoutDashboard} label="Overview" active={activeTab === 'overview'} onClick={() => setActiveTab('overview')} />
           <DesktopNavItem icon={Users} label="Guests" active={activeTab === 'guests'} onClick={() => setActiveTab('guests')} />
           <DesktopNavItem icon={Logs} label="Logs" active={activeTab === 'logs'} onClick={() => setActiveTab('logs')} />
-          <DesktopNavItem icon={Settings} label="Config" active={activeTab === 'settings'} onClick={() => setActiveTab('settings')} />
-          {/* New Console Tab Link */}
           <DesktopNavItem icon={Terminal} label="Console" active={activeTab === 'console'} onClick={() => setActiveTab('console')} />
+          <DesktopNavItem icon={Settings} label="Config" active={activeTab === 'settings'} onClick={() => setActiveTab('settings')} />
         </nav>
       </aside>
 
@@ -334,12 +333,12 @@ function DashboardLayout({ user }) {
 }
 
 // ===========================================
-// SUB-MODULE: CONSOLE (NEW)
+// SUB-MODULE: CONSOLE (Power User)
 // ===========================================
 function ConsoleModule({ currentUser }) {
-    const [formData, setFormData] = useState({ username: '', name: '', role: 'Staff' });
+    const [formData, setFormData] = useState({ username: '', name: '', role: 'Event Manager' });
     const [terminalLines, setTerminalLines] = useState([
-        { type: 'info', text: 'System Console v1.0.2 Ready...' },
+        { type: 'info', text: 'System Console v1.0.3 Ready...' },
         { type: 'info', text: 'Connected to Firestore Instance.' }
     ]);
     const [currentCommand, setCurrentCommand] = useState('');
@@ -349,33 +348,39 @@ function ConsoleModule({ currentUser }) {
         if(!formData.username || !formData.name) return;
         const cmd = `createStaffUser("${formData.username}", "${formData.name}", "${formData.role}")`;
         setCurrentCommand(cmd);
-        // Simulate typing into terminal
-        // Focus on input would go here if it was a real input
     };
 
     const runCommand = async () => {
         if(!currentCommand) return;
         
-        // Log the input
         setTerminalLines(prev => [...prev, { type: 'input', text: `> ${currentCommand}` }]);
         
-        // Parse the command
-        // Expected format: createStaffUser("user", "name", "role")
         const regex = /createStaffUser\s*\(\s*"([^"]+)"\s*,\s*"([^"]+)"\s*,\s*"([^"]+)"\s*\)/;
         const match = currentCommand.match(regex);
 
         if(match) {
-            const [_, username, name, role] = match;
+            const [_, username, realName, role] = match;
             
+            // --- EXACT LOGIC FROM YOUR SNIPPET ---
+            let targetEmail = "";
+            const roleLower = role.toLowerCase();
+            if (roleLower.includes('event')) targetEmail = "eveman.test@gmail.com";
+            else if (roleLower.includes('reg')) targetEmail = "regdesk.test@gmail.com";
+            else if (roleLower.includes('sec')) targetEmail = "sechead.test@gmail.com";
+            else {
+                setTerminalLines(prev => [...prev, { type: 'error', text: `x Error: Unknown role. Use 'Event Manager', 'Registration Desk', or 'Security Head'` }]);
+                setCurrentCommand('');
+                return;
+            }
+
             try {
-                // Execute Database Write (Simulating the web app function)
                 await setDoc(doc(db, 'allowed_usernames', username), {
-                    name: name,
+                    realName: realName,
                     role: role,
-                    createdBy: currentUser.email,
+                    email: targetEmail,
                     createdAt: Date.now()
                 });
-                setTerminalLines(prev => [...prev, { type: 'success', text: `✓ User '${username}' created successfully.` }]);
+                setTerminalLines(prev => [...prev, { type: 'success', text: `✓ SUCCESS: User '${username}' created for ${targetEmail}` }]);
             } catch (err) {
                 setTerminalLines(prev => [...prev, { type: 'error', text: `x Error: ${err.message}` }]);
             }
@@ -383,15 +388,14 @@ function ConsoleModule({ currentUser }) {
             setTerminalLines(prev => [...prev, { type: 'error', text: `x Syntax Error: Unknown command format.` }]);
         }
 
-        setCurrentCommand(''); // Clear input line
-        // Scroll to bottom
+        setCurrentCommand(''); 
         setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
     };
 
     const copyToClipboard = () => {
         if(currentCommand) {
             navigator.clipboard.writeText(currentCommand);
-            alert("Command copied to clipboard!");
+            // Optional: visual feedback
         }
     };
 
@@ -405,12 +409,12 @@ function ConsoleModule({ currentUser }) {
                 </h2>
                 <div className="space-y-4">
                     <div className="space-y-1">
-                        <label className="text-xs uppercase text-slate-500 font-semibold ml-1">Username (Email)</label>
+                        <label className="text-xs uppercase text-slate-500 font-semibold ml-1">Username (ID)</label>
                         <input 
                             type="text" 
                             value={formData.username}
                             onChange={e => setFormData({...formData, username: e.target.value})}
-                            placeholder="user@example.com"
+                            placeholder="user_id"
                             className="w-full bg-slate-950 border border-white/10 rounded-xl p-3 text-sm text-white focus:outline-none focus:border-blue-500"
                         />
                     </div>
@@ -431,10 +435,9 @@ function ConsoleModule({ currentUser }) {
                             onChange={e => setFormData({...formData, role: e.target.value})}
                             className="w-full bg-slate-950 border border-white/10 rounded-xl p-3 text-sm text-white focus:outline-none focus:border-blue-500"
                         >
-                            <option value="Staff">Staff</option>
-                            <option value="Admin">Admin</option>
-                            <option value="Security">Security</option>
-                            <option value="Manager">Manager</option>
+                            <option value="Event Manager">Event Manager</option>
+                            <option value="Registration Desk">Registration Desk</option>
+                            <option value="Security Head">Security Head</option>
                         </select>
                     </div>
                     
@@ -479,18 +482,10 @@ function ConsoleModule({ currentUser }) {
                     />
                     
                     <div className="flex items-center gap-1">
-                        <button 
-                            onClick={copyToClipboard}
-                            title="Copy Command"
-                            className="p-2 hover:bg-white/10 rounded text-slate-400 hover:text-white transition-colors"
-                        >
+                        <button onClick={copyToClipboard} title="Copy" className="p-2 hover:bg-white/10 rounded text-slate-400 hover:text-white transition-colors">
                             <Copy className="w-4 h-4" />
                         </button>
-                        <button 
-                            onClick={runCommand}
-                            title="Run Command"
-                            className="p-2 hover:bg-emerald-500/20 rounded text-emerald-500 transition-colors"
-                        >
+                        <button onClick={runCommand} title="Run" className="p-2 hover:bg-emerald-500/20 rounded text-emerald-500 transition-colors">
                             <Play className="w-4 h-4" />
                         </button>
                     </div>
@@ -754,7 +749,7 @@ function GuestListModule({ tickets, initialFilterStatus, initialFilterType, init
                     >
                         <Download className="w-4 h-4" />
                         <span>Export Data</span>
-                    </button>
+                     </button>
 
                 </div>
             </div>
