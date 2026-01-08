@@ -8,7 +8,7 @@ import {
 import { 
   LayoutDashboard, Users, Logs, Settings, Search, Shield, Ticket, 
   UserCheck, Clock, Lock, LogOut, Menu, X, ChevronRight, Smartphone, LogIn,
-  Filter, Download, Upload, Trash2, MoreVertical, CheckSquare, Square, Crown, FileText, ChevronDown, X as CloseIcon, Terminal, Copy, Play, Save, Edit2, CheckCircle, AlertCircle
+  Filter, Download, Upload, Trash2, MoreVertical, CheckSquare, Square, Crown, FileText, ChevronDown, X as CloseIcon, Terminal, Copy, Play, Save, Edit2, CheckCircle, AlertCircle, Eye, EyeOff
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
@@ -59,6 +59,7 @@ export default function App() {
 function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -94,13 +95,26 @@ function LoginScreen() {
               placeholder="admin@example.com"
             />
           </div>
+          
           <div className="space-y-1">
             <label className="text-xs font-semibold uppercase text-slate-500 ml-1">Password</label>
-            <input 
-              type="password" required value={password} onChange={(e) => setPassword(e.target.value)}
-              className="w-full bg-black/40 border border-white/10 rounded-xl p-3.5 text-white focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-slate-600"
-              placeholder="••••••••"
-            />
+            <div className="relative">
+                <input 
+                  type={showPassword ? "text" : "password"} 
+                  required 
+                  value={password} 
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full bg-black/40 border border-white/10 rounded-xl p-3.5 pr-10 text-white focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-slate-600"
+                  placeholder="••••••••"
+                />
+                <button 
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white transition-colors"
+                >
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+            </div>
           </div>
 
           {error && <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-xs text-center font-medium">{error}</div>}
@@ -399,7 +413,7 @@ function ConsoleModule({ currentUser }) {
     };
 
     return (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-[calc(100vh-140px)]">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-[calc(100vh-140px)] -mt-4">
             {/* Input Form */}
             <div className="bg-slate-900/40 border border-white/5 rounded-2xl p-6 h-fit">
                 <h2 className="text-lg font-medium text-white mb-4 flex items-center gap-2">
@@ -753,7 +767,7 @@ function GuestListModule({ tickets, initialFilterStatus, initialFilterType, init
                     >
                         <Download className="w-4 h-4" />
                         <span>Export Data</span>
-                    </button>
+                     </button>
 
                 </div>
             </div>
