@@ -413,7 +413,7 @@ function ConsoleModule({ currentUser }) {
     };
 
     return (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-[5px] h-[calc(100vh-140px)] -mt-4">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 h-[calc(100vh-140px)] -mt-4">
             {/* Input Form */}
             <div className="bg-slate-900/40 border border-white/5 rounded-2xl p-6 h-fit">
                 <h2 className="text-lg font-medium text-white mb-4 flex items-center gap-2">
