@@ -373,6 +373,14 @@ function GuestListModule({ tickets, initialFilterStatus, initialFilterType, init
         else setSelectedIds(new Set(filteredTickets.map(t => t.id)));
     };
 
+    const toggleSelectionMode = () => {
+        if (isSelectionMode) {
+            // If turning OFF, clear selections
+            setSelectedIds(new Set());
+        }
+        setIsSelectionMode(!isSelectionMode);
+    };
+
     const handleDelete = async () => {
         if (!confirm(`Delete ${selectedIds.size} guests?`)) return;
         const batch = writeBatch(db);
@@ -497,14 +505,17 @@ function GuestListModule({ tickets, initialFilterStatus, initialFilterType, init
 
     return (
         <div className="space-y-4">
-            {/* Toolbar */}
+            {/* Toolbar - Split into 2 rows, z-20 for dropdown overlap */}
             <div className="bg-slate-900/40 p-4 rounded-2xl border border-white/5 flex flex-col gap-4 relative z-20">
+                
+                {/* ROW 1: Search & Filters */}
                 <div className="flex flex-col md:flex-row gap-4 justify-between items-start md:items-center">
                     <div className="relative flex-1 w-full md:w-auto">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
                         <input type="text" placeholder="Search guests..." value={search} onChange={e => setSearch(e.target.value)}
                         className="w-full bg-slate-950 border border-white/10 rounded-xl py-2 pl-10 pr-4 text-sm focus:outline-none focus:border-blue-500 text-white placeholder:text-slate-600" />
                     </div>
+                    
                     <div className="flex gap-2 flex-wrap w-full md:w-auto justify-end">
                         <select value={initialFilterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="bg-slate-950 border border-white/10 rounded-lg text-xs px-3 py-2 text-slate-300 focus:outline-none">
                             <option value="all">All Status</option>
@@ -519,9 +530,11 @@ function GuestListModule({ tickets, initialFilterStatus, initialFilterType, init
                             <option value="Gold">VVIP</option>
                             <option value="Special">Special (Grouped)</option>
                         </select>
-                        <button onClick={() => setIsSelectionMode(!isSelectionMode)} className={`p-2 rounded-lg border ${isSelectionMode ? 'bg-blue-600 border-blue-600 text-white' : 'border-white/10 text-slate-400'}`}>
+                        
+                        <button onClick={toggleSelectionMode} className={`p-2 rounded-lg border ${isSelectionMode ? 'bg-blue-600 border-blue-600 text-white' : 'border-white/10 text-slate-400'}`}>
                             <CheckSquare className="w-4 h-4" />
                         </button>
+                        
                         {isSelectionMode && selectedIds.size > 0 && (
                             <button onClick={handleDelete} className="p-2 rounded-lg border border-red-500/20 bg-red-500/10 text-red-400">
                                 <Trash2 className="w-4 h-4" />
@@ -529,11 +542,17 @@ function GuestListModule({ tickets, initialFilterStatus, initialFilterType, init
                         )}
                     </div>
                 </div>
-                <div className="flex flex-wrap gap-3 border-t border-white/5 pt-4">
+
+                {/* ROW 2: Import / Export - Aligned to the RIGHT (justify-end) */}
+                <div className="flex flex-wrap gap-3 border-t border-white/5 pt-4 justify-end">
+                     
+                     {/* IMPORT BUTTON */}
                      <button onClick={() => setIsImportModalOpen(true)} className="flex items-center gap-2 px-4 py-2 rounded-lg border border-white/10 text-slate-300 hover:bg-white/5 text-sm font-medium transition-colors">
                         <Upload className="w-4 h-4" />
                         <span>Import Data</span>
                      </button>
+
+                     {/* EXPORT BUTTON */}
                      <div className="relative">
                         <button 
                             disabled={selectedIds.size === 0} 
@@ -544,8 +563,9 @@ function GuestListModule({ tickets, initialFilterStatus, initialFilterType, init
                             <span>Export Selected {selectedIds.size > 0 ? `(${selectedIds.size})` : ''}</span>
                             <ChevronDown className="w-3 h-3 ml-1 opacity-50" />
                         </button>
+                        
                         {isExportMenuOpen && (
-                            <div className="absolute top-full mt-2 left-0 w-40 bg-slate-900 border border-white/10 rounded-xl shadow-2xl z-50 overflow-hidden flex flex-col p-1 animate-in fade-in zoom-in-95 duration-200">
+                            <div className="absolute top-full mt-2 right-0 w-40 bg-slate-900 border border-white/10 rounded-xl shadow-2xl z-50 overflow-hidden flex flex-col p-1 animate-in fade-in zoom-in-95 duration-200">
                                 {['json','csv','xlsx','docx','txt','pdf'].map(fmt => (
                                     <button key={fmt} onClick={() => handleExport(fmt)} className="px-3 py-2 text-xs text-left text-slate-300 hover:bg-white/10 rounded uppercase font-medium flex items-center justify-between group">
                                         <span>.{fmt}</span>
@@ -555,6 +575,7 @@ function GuestListModule({ tickets, initialFilterStatus, initialFilterType, init
                             </div>
                         )}
                      </div>
+
                 </div>
             </div>
 
@@ -654,6 +675,20 @@ function LogsModule({ logs }) {
         setSelectedIds(newSet);
     };
 
+    // Toggle Selection Mode Logic (Clear on exit)
+    const toggleSelectionMode = () => {
+        if (isSelectionMode) {
+            setSelectedIds(new Set());
+        }
+        setIsSelectionMode(!isSelectionMode);
+    };
+
+    // Select All Logic
+    const toggleSelectAll = () => {
+        if (selectedIds.size === filteredLogs.length) setSelectedIds(new Set());
+        else setSelectedIds(new Set(filteredLogs.map(l => l.id)));
+    };
+
     return (
         <div className="space-y-4">
             <div className="flex flex-col md:flex-row gap-4 bg-slate-900/40 p-4 rounded-2xl border border-white/5">
@@ -662,7 +697,9 @@ function LogsModule({ logs }) {
                    <input type="text" placeholder="Search logs..." value={search} onChange={e => setSearch(e.target.value)}
                      className="w-full bg-slate-950 border border-white/10 rounded-xl py-2 pl-10 pr-4 text-sm focus:outline-none focus:border-blue-500 text-white" />
                 </div>
-                <div className="flex gap-2">
+                
+                {/* Controls - Moved Select/Delete to RIGHT */}
+                <div className="flex gap-2 justify-end">
                     <select value={filter} onChange={(e) => setFilter(e.target.value)} className="bg-slate-950 border border-white/10 rounded-lg text-xs px-3 py-2 text-slate-300 focus:outline-none">
                         <option value="all">All Actions</option>
                         <option value="LOGIN">Login</option>
@@ -670,10 +707,12 @@ function LogsModule({ logs }) {
                         <option value="SCAN_ENTRY">Scan Entry</option>
                         <option value="CONFIG_CHANGE">Config Change</option>
                     </select>
-                    <button onClick={() => setIsSelectionMode(!isSelectionMode)} className={`p-2 rounded-lg border ${isSelectionMode ? 'bg-blue-600 border-blue-600 text-white' : 'border-white/10 text-slate-400'}`}>
+                    
+                    <button onClick={toggleSelectionMode} className={`p-2 rounded-lg border ${isSelectionMode ? 'bg-blue-600 border-blue-600 text-white' : 'border-white/10 text-slate-400'}`}>
                         <CheckSquare className="w-4 h-4" />
                     </button>
-                    {isSelectionMode && (
+                    
+                    {isSelectionMode && selectedIds.size > 0 && (
                         <button onClick={handleDelete} className="p-2 rounded-lg border border-red-500/20 bg-red-500/10 text-red-400">
                             <Trash2 className="w-4 h-4" />
                         </button>
@@ -685,7 +724,13 @@ function LogsModule({ logs }) {
                 <table className="w-full text-left text-sm text-slate-400">
                     <thead className="bg-white/5 text-slate-200 uppercase text-xs">
                       <tr>
-                        {isSelectionMode && <th className="p-4 w-10">#</th>}
+                        {isSelectionMode && (
+                            <th className="p-4 w-10">
+                                <button onClick={toggleSelectAll}>
+                                    {selectedIds.size === filteredLogs.length && filteredLogs.length > 0 ? <CheckSquare className="w-4 h-4 text-blue-500"/> : <Square className="w-4 h-4"/>}
+                                </button>
+                            </th>
+                        )}
                         <th className="p-4">Time</th>
                         <th className="p-4">User</th>
                         <th className="p-4">Action</th>
@@ -694,9 +739,9 @@ function LogsModule({ logs }) {
                     </thead>
                     <tbody className="divide-y divide-white/5">
                       {filteredLogs.map(log => (
-                        <tr key={log.id} className="hover:bg-white/5">
+                        <tr key={log.id} className={`hover:bg-white/5 ${selectedIds.has(log.id) ? 'bg-blue-500/5' : ''}`}>
                            {isSelectionMode && (
-                                <td className="p-4">
+                                <td className="p-4 text-center">
                                     <button onClick={() => toggleSelect(log.id)}>
                                         {selectedIds.has(log.id) ? <CheckSquare className="w-4 h-4 text-blue-500"/> : <Square className="w-4 h-4"/>}
                                     </button>
