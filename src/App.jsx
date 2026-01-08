@@ -710,12 +710,12 @@ function LogsModule({ logs }) {
                 </div>
                 
                 {/* RIGHT SIDE: Action Controls (Single Line) */}
-                <div className="flex gap-2 items-center">
-                    {/* Dropdown - Shorter/Narrower */}
+                <div className="flex gap-2 items-center w-full md:w-auto">
+                    {/* Dropdown - Thick, Expanding */}
                     <select 
                         value={filter} 
                         onChange={(e) => setFilter(e.target.value)} 
-                        className="bg-slate-950 border border-white/10 rounded-lg text-[10px] px-2 py-1.5 text-slate-300 focus:outline-none w-28"
+                        className="bg-slate-950 border border-white/10 rounded-xl text-sm px-4 py-2 text-slate-300 focus:outline-none flex-1 md:w-48"
                     >
                         <option value="all">All Actions</option>
                         <option value="LOGIN">Login</option>
