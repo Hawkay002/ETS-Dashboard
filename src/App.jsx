@@ -7,7 +7,7 @@ import {
 } from 'recharts';
 import { 
   LayoutDashboard, Users, Activity, Settings, Search, Shield, Ticket, 
-  UserCheck, Clock, Lock, LogOut, Menu, X, ChevronRight, Smartphone
+  UserCheck, Clock, Lock, LogOut, Menu, X, ChevronRight, Smartphone, LogIn
 } from 'lucide-react';
 
 // --- 1. FIREBASE CONFIG ---
@@ -48,7 +48,7 @@ export default function App() {
   return <DashboardLayout user={user} />;
 }
 
-// --- 3. LOGIN SCREEN (Mobile Optimized) ---
+// --- 3. LOGIN SCREEN ---
 function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -110,12 +110,13 @@ function LoginScreen() {
   );
 }
 
-// --- 4. MAIN DASHBOARD LAYOUT ---
+// --- 4. DASHBOARD LAYOUT ---
 function DashboardLayout({ user }) {
   const [activeTab, setActiveTab] = useState('overview');
   const [tickets, setTickets] = useState([]);
   const [logs, setLogs] = useState([]);
   const [settings, setSettings] = useState(null);
+  const [isProfileOpen, setIsProfileOpen] = useState(false); // State for Avatar Dropdown
 
   // Data Fetching
   useEffect(() => {
@@ -144,10 +145,26 @@ function DashboardLayout({ user }) {
     { name: 'Absent', value: tickets.filter(t => t.status === 'absent').length, color: '#ef4444' },
   ];
 
+  // Helper for Header Profile Dropdown
+  const UserProfileDropdown = () => (
+    <div className="absolute right-0 top-12 w-64 bg-slate-900 border border-white/10 rounded-xl shadow-2xl p-4 z-50 backdrop-blur-xl animate-in fade-in zoom-in-95 duration-200">
+        <div className="mb-4 pb-4 border-b border-white/10">
+            <p className="text-xs text-slate-500 uppercase font-semibold mb-1">Signed in as</p>
+            <p className="text-sm text-white font-medium truncate">{user.email}</p>
+        </div>
+        <button 
+            onClick={() => signOut(auth)} 
+            className="w-full flex items-center gap-3 px-3 py-2 text-sm text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
+        >
+            <LogOut className="w-4 h-4" /> Sign Out
+        </button>
+    </div>
+  );
+
   return (
     <div className="flex h-screen bg-slate-950 text-slate-200 font-sans overflow-hidden flex-col md:flex-row">
       
-      {/* DESKTOP SIDEBAR (Hidden on Mobile) */}
+      {/* DESKTOP SIDEBAR */}
       <aside className="hidden md:flex w-64 border-r border-white/10 bg-slate-900/50 backdrop-blur-md flex-col">
         <div className="p-6 border-b border-white/10">
           <h1 className="text-xl font-light tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-white to-slate-400">
@@ -167,17 +184,48 @@ function DashboardLayout({ user }) {
         </div>
       </aside>
 
-      {/* MOBILE HEADER (Visible only on Mobile) */}
-      <header className="md:hidden h-14 border-b border-white/10 bg-slate-900/80 backdrop-blur-md flex items-center justify-between px-4 sticky top-0 z-20">
-        <div className="text-lg font-bold tracking-tight text-white">Cmd.</div>
-        <div className="flex items-center gap-3">
-          {settings && <span className="text-xs text-blue-400 bg-blue-500/10 px-2 py-1 rounded-full border border-blue-500/20 max-w-[120px] truncate">{settings.name}</span>}
-          <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-blue-500 to-purple-600 border border-white/20"></div>
+      {/* MOBILE HEADER */}
+      <header className="md:hidden h-16 border-b border-white/10 bg-slate-900/80 backdrop-blur-md flex items-center justify-between px-4 sticky top-0 z-30">
+        {/* Full App Name on Mobile */}
+        <div className="text-lg font-light tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-white to-slate-400">
+            Ticketing<span className="font-bold">Cmd</span>.
+        </div>
+        
+        <div className="relative">
+          <button 
+            onClick={() => setIsProfileOpen(!isProfileOpen)}
+            className="flex items-center gap-3 focus:outline-none"
+          >
+            <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-blue-500 to-purple-600 border border-white/20 shadow-lg"></div>
+          </button>
+          
+          {/* Mobile Profile Dropdown */}
+          {isProfileOpen && <UserProfileDropdown />}
         </div>
       </header>
 
-      {/* MAIN CONTENT AREA */}
-      <main className="flex-1 overflow-y-auto bg-slate-950 pb-20 md:pb-0 scroll-smooth">
+      {/* DESKTOP HEADER (For Tablet/Desktop View) */}
+      <header className="hidden md:flex h-16 border-b border-white/5 bg-slate-950/50 sticky top-0 backdrop-blur z-10 items-center justify-between px-8">
+         <h2 className="font-medium text-lg capitalize">{activeTab}</h2>
+         <div className="relative flex items-center gap-4">
+             {settings && (
+               <div className="px-3 py-1 bg-white/5 rounded-full text-xs border border-white/10">
+                 Event: <span className="text-blue-400">{settings.name}</span>
+               </div>
+             )}
+             
+             {/* Desktop Avatar Trigger */}
+             <button onClick={() => setIsProfileOpen(!isProfileOpen)} className="focus:outline-none">
+                <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-blue-500 to-purple-600 border border-white/20 cursor-pointer"></div>
+             </button>
+
+             {/* Desktop Profile Dropdown */}
+             {isProfileOpen && <UserProfileDropdown />}
+         </div>
+      </header>
+
+      {/* MAIN CONTENT */}
+      <main className="flex-1 overflow-y-auto bg-slate-950 pb-20 md:pb-0 scroll-smooth" onClick={() => { if(isProfileOpen) setIsProfileOpen(false) }}>
         <div className="p-4 md:p-8 max-w-7xl mx-auto">
           
           {/* TAB: OVERVIEW */}
@@ -201,11 +249,14 @@ function DashboardLayout({ user }) {
                         <Pie data={statusData} innerRadius={50} outerRadius={70} paddingAngle={5} dataKey="value" stroke="none">
                           {statusData.map((entry, index) => <Cell key={index} fill={entry.color} />)}
                         </Pie>
-                        <Tooltip contentStyle={{ backgroundColor: '#0f172a', border: 'none', borderRadius: '8px', fontSize: '12px' }} />
+                        {/* UPDATED: Tooltip text color forced to white */}
+                        <Tooltip 
+                            contentStyle={{ backgroundColor: '#0f172a', border: '1px solid #1e293b', borderRadius: '8px', fontSize: '12px', color: '#f8fafc' }} 
+                            itemStyle={{ color: '#e2e8f0' }}
+                        />
                       </PieChart>
                     </ResponsiveContainer>
                   </div>
-                  {/* Legend */}
                   <div className="flex justify-center gap-4 text-xs mt-[-10px]">
                     {statusData.map(d => (
                       <div key={d.name} className="flex items-center gap-1.5">
@@ -216,7 +267,6 @@ function DashboardLayout({ user }) {
                   </div>
                 </div>
 
-                {/* Mobile Friendly Activity Feed */}
                 <div className="bg-slate-900/40 border border-white/5 rounded-2xl p-5 shadow-sm flex flex-col">
                   <div className="flex justify-between items-center mb-4">
                     <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Activity Feed</h3>
@@ -241,7 +291,6 @@ function DashboardLayout({ user }) {
           {/* TAB: GUESTS */}
           {activeTab === 'guests' && (
             <div className="space-y-4">
-              {/* Search Bar */}
               <div className="sticky top-0 bg-slate-950/95 backdrop-blur py-2 z-10 -mx-4 px-4 md:mx-0 md:px-0 md:static">
                 <div className="relative">
                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
@@ -250,7 +299,6 @@ function DashboardLayout({ user }) {
                 </div>
               </div>
 
-              {/* Mobile Card List */}
               <div className="md:hidden space-y-3">
                 {tickets.map(t => (
                   <div key={t.id} className="bg-slate-900/50 border border-white/5 rounded-xl p-4 flex justify-between items-center active:bg-white/5 transition-colors">
@@ -266,7 +314,6 @@ function DashboardLayout({ user }) {
                 ))}
               </div>
 
-              {/* Desktop Table */}
               <div className="hidden md:block bg-slate-900/40 border border-white/5 rounded-2xl overflow-hidden">
                 <table className="w-full text-left text-sm text-slate-400">
                   <thead className="bg-white/5 text-slate-200 uppercase text-xs">
@@ -291,7 +338,6 @@ function DashboardLayout({ user }) {
           {/* TAB: LOGS */}
           {activeTab === 'logs' && (
              <div className="space-y-4">
-               {/* Mobile Log Cards */}
                <div className="md:hidden space-y-3">
                  {logs.map(log => (
                    <div key={log.id} className="bg-slate-900/50 border border-white/5 rounded-xl p-3 text-sm">
@@ -305,7 +351,6 @@ function DashboardLayout({ user }) {
                  ))}
                </div>
 
-               {/* Desktop Log Table */}
                <div className="hidden md:block bg-slate-900/40 border border-white/5 rounded-2xl overflow-hidden">
                   <table className="w-full text-left text-sm text-slate-400">
                     <thead className="bg-white/5 text-slate-200 uppercase text-xs">
@@ -351,7 +396,7 @@ function DashboardLayout({ user }) {
       </main>
 
       {/* MOBILE BOTTOM NAVIGATION */}
-      <nav className="md:hidden fixed bottom-0 w-full h-16 bg-slate-900/90 backdrop-blur-lg border-t border-white/10 flex justify-around items-center px-2 z-50 safe-area-pb">
+      <nav className="md:hidden fixed bottom-0 w-full h-16 bg-slate-900/90 backdrop-blur-lg border-t border-white/10 flex justify-around items-center px-2 z-40 safe-area-pb">
         <MobileNavItem icon={LayoutDashboard} label="Home" active={activeTab === 'overview'} onClick={() => setActiveTab('overview')} />
         <MobileNavItem icon={Users} label="Guests" active={activeTab === 'guests'} onClick={() => setActiveTab('guests')} />
         <MobileNavItem icon={Activity} label="Logs" active={activeTab === 'logs'} onClick={() => setActiveTab('logs')} />
@@ -362,7 +407,6 @@ function DashboardLayout({ user }) {
 }
 
 // --- SUB COMPONENTS ---
-
 function MobileNavItem({ icon: Icon, label, active, onClick }) {
   return (
     <button onClick={onClick} className={`flex flex-col items-center gap-1 p-2 w-16 transition-all ${active ? 'text-blue-400' : 'text-slate-500'}`}>
