@@ -955,7 +955,12 @@ function StatusBadge({ status }) {
     'absent': 'bg-red-500/10 text-red-500 border-red-500/20',
     'coming-soon': 'bg-amber-500/10 text-amber-500 border-amber-500/20'
   };
-  return <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold border uppercase ${styles[status] || styles['coming-soon']}`}>{status}</span>;
+  const displayStatus = status ? status.replace(/-/g, ' ') : status;
+  return (
+    <span className={`px-2 py-1 rounded-md text-[10px] font-bold border uppercase inline-block text-center min-w-[100px] ${styles[status] || styles['coming-soon']}`}>
+        {displayStatus}
+    </span>
+  );
 }
 
 function TypeBadge({ type }) {
