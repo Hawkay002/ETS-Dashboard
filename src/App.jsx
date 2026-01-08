@@ -529,6 +529,7 @@ function GuestListModule({ tickets, initialFilterStatus, initialFilterType, init
                 
                 {/* ROW 2: Filters & Select (Full Width & Equal Height) */}
                 <div className="flex flex-col sm:flex-row gap-2 w-full">
+                    {/* Filters Expand with flex-1 and have thicker padding (py-2.5) */}
                     <select value={initialFilterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="bg-slate-950 border border-white/10 rounded-xl text-sm px-3 py-2.5 text-slate-300 focus:outline-none flex-1">
                         <option value="all">All Status</option>
                         <option value="arrived">Arrived</option>
@@ -543,7 +544,7 @@ function GuestListModule({ tickets, initialFilterStatus, initialFilterType, init
                         <option value="Special">Special (Grouped)</option>
                     </select>
                     
-                    <div className="flex gap-2 justify-end">
+                    <div className="flex gap-2 justify-end sm:justify-start">
                         {/* Delete Button (Always Visible, disabled if 0 selected, BEFORE Select) */}
                         <button 
                             onClick={handleDelete} 
@@ -580,7 +581,7 @@ function GuestListModule({ tickets, initialFilterStatus, initialFilterType, init
                         className="flex items-center gap-2 px-6 py-2.5 rounded-xl border border-white/10 text-slate-300 hover:bg-white/5 text-sm font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:bg-transparent"
                     >
                         <Download className="w-4 h-4" />
-                        <span>Export Data {selectedIds.size > 0 ? `(${selectedIds.size})` : ''}</span>
+                        <span>Export Data</span>
                     </button>
 
                 </div>
@@ -753,11 +754,11 @@ function LogsModule({ logs }) {
                 
                 {/* RIGHT SIDE: Action Controls (Full Width on Mobile, Single Line) */}
                 <div className="flex gap-2 items-center w-full md:w-auto">
-                    {/* Dropdown - Expands to fill gap */}
+                    {/* Dropdown - Expanded with flex-1 */}
                     <select 
                         value={filter} 
                         onChange={(e) => setFilter(e.target.value)} 
-                        className="bg-slate-950 border border-white/10 rounded-xl text-sm px-4 py-2 text-slate-300 focus:outline-none flex-1 md:flex-initial md:w-36 h-[42px]"
+                        className="bg-slate-950 border border-white/10 rounded-xl text-sm px-4 py-2 text-slate-300 focus:outline-none flex-1 md:flex-initial md:w-48 h-[42px]"
                     >
                         <option value="all">All Actions</option>
                         <option value="LOGIN">Login</option>
@@ -961,7 +962,7 @@ function ImportModal({ close, currentUser }) {
                 try {
                     const data = JSON.parse(evt.target.result);
                     if (Array.isArray(data)) {
-                        await processImportData(data, currentUser, close);
+                        await processImportData(data, close);
                     } else {
                         alert("Invalid JSON format. Expected an array.");
                     }
@@ -977,7 +978,7 @@ function ImportModal({ close, currentUser }) {
                 const wsname = wb.SheetNames[0];
                 const ws = wb.Sheets[wsname];
                 const data = XLSX.utils.sheet_to_json(ws);
-                await processImportData(data, currentUser, close);
+                await processImportData(data, close);
             };
             reader.readAsBinaryString(file);
         } else {
@@ -985,7 +986,7 @@ function ImportModal({ close, currentUser }) {
         }
     };
 
-    const processImportData = async (data, currentUser, closeCallback) => {
+    const processImportData = async (data, closeCallback) => {
         if (confirm(`Import ${data.length} records?`)) {
             const chunks = [];
             for (let i = 0; i < data.length; i += 400) chunks.push(data.slice(i, i + 400));
