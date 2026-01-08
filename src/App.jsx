@@ -523,9 +523,13 @@ function GuestListModule({ tickets, initialFilterStatus, initialFilterType, init
     const [exportFormat, setExportFormat] = useState('xlsx');
     const [exportFileName, setExportFileName] = useState('');
 
-    // -- Filter Logic --
+    // -- Safe Filter Logic --
     const filteredTickets = useMemo(() => {
-        let res = tickets.filter(t => t.name.toLowerCase().includes(search.toLowerCase()) || t.phone.includes(search));
+        let res = tickets.filter(t => {
+            const name = t.name ? t.name.toLowerCase() : '';
+            const phone = t.phone ? String(t.phone) : '';
+            return name.includes(search.toLowerCase()) || phone.includes(search);
+        });
         
         if (initialFilterStatus !== 'all') res = res.filter(t => t.status === initialFilterStatus);
         
@@ -536,9 +540,11 @@ function GuestListModule({ tickets, initialFilterStatus, initialFilterType, init
         }
 
         res.sort((a, b) => {
+            const nameA = a.name || '';
+            const nameB = b.name || '';
             if (initialSort === 'newest') return b.createdAt - a.createdAt;
             if (initialSort === 'oldest') return a.createdAt - b.createdAt;
-            if (initialSort === 'name-asc') return a.name.localeCompare(b.name);
+            if (initialSort === 'name-asc') return nameA.localeCompare(nameB);
             if (initialSort === 'type') {
                  const rank = { 'Gold': 2, 'Diamond': 1, 'Classic': 0 };
                  return (rank[b.ticketType] || 0) - (rank[a.ticketType] || 0);
@@ -569,13 +575,17 @@ function GuestListModule({ tickets, initialFilterStatus, initialFilterType, init
         setIsSelectionMode(!isSelectionMode);
     };
 
-    const handleDelete = async () => {
-        if (!confirm(`Delete ${selectedIds.size} guests?`)) return;
+    const handleDeleteClick = () => {
+        setIsDeleteModalOpen(true);
+    };
+
+    const confirmDelete = async () => {
         const batch = writeBatch(db);
         selectedIds.forEach(id => batch.delete(doc(db, APP_COLLECTION_ROOT, SHARED_DATA_ID, 'tickets', id)));
         await batch.commit();
         setSelectedIds(new Set());
         setIsSelectionMode(false);
+        setIsDeleteModalOpen(false);
     };
 
     // -- OPEN EXPORT MODAL --
@@ -857,9 +867,9 @@ function GuestListModule({ tickets, initialFilterStatus, initialFilterType, init
                                     </button>
                                 </td>
                             )}
-                            <td className="p-4 font-medium text-white">{t.name}</td>
+                            <td className="p-4 font-medium text-white">{t.name || 'Unknown'}</td>
                             <td className="p-4"><TypeBadge type={t.ticketType} /></td>
-                            <td className="p-4">{t.phone}</td>
+                            <td className="p-4">{t.phone || '-'}</td>
                             <td className="p-4">{t.gender || '-'}</td>
                             <td className="p-4">{t.age || '-'}</td>
                             <td className="p-4">
