@@ -505,46 +505,48 @@ function GuestListModule({ tickets, initialFilterStatus, initialFilterType, init
 
     return (
         <div className="space-y-4">
-            {/* Toolbar - Split into 2 rows, z-20 for dropdown overlap */}
+            {/* Toolbar - Centered Layout */}
             <div className="bg-slate-900/40 p-4 rounded-2xl border border-white/5 flex flex-col gap-4 relative z-20">
                 
-                {/* ROW 1: Search & Filters */}
-                <div className="flex flex-col md:flex-row gap-4 justify-between items-start md:items-center">
-                    <div className="relative flex-1 w-full md:w-auto">
+                {/* ROW 1: Search (Full Width) */}
+                <div className="w-full">
+                    <div className="relative">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
                         <input type="text" placeholder="Search guests..." value={search} onChange={e => setSearch(e.target.value)}
                         className="w-full bg-slate-950 border border-white/10 rounded-xl py-2 pl-10 pr-4 text-sm focus:outline-none focus:border-blue-500 text-white placeholder:text-slate-600" />
                     </div>
+                </div>
+                
+                {/* ROW 2: Filters & Select (Centered) */}
+                <div className="flex gap-2 w-full justify-center">
+                    <select value={initialFilterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="bg-slate-950 border border-white/10 rounded-lg text-xs px-3 py-2 text-slate-300 focus:outline-none">
+                        <option value="all">All Status</option>
+                        <option value="arrived">Arrived</option>
+                        <option value="coming-soon">Pending</option>
+                        <option value="absent">Absent</option>
+                    </select>
+                    <select value={initialFilterType} onChange={(e) => setFilterType(e.target.value)} className="bg-slate-950 border border-white/10 rounded-lg text-xs px-3 py-2 text-slate-300 focus:outline-none">
+                        <option value="all">All Types</option>
+                        <option value="Classic">Classic</option>
+                        <option value="Diamond">VIP</option>
+                        <option value="Gold">VVIP</option>
+                        <option value="Special">Special (Grouped)</option>
+                    </select>
                     
-                    <div className="flex gap-2 flex-wrap w-full md:w-auto justify-end">
-                        <select value={initialFilterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="bg-slate-950 border border-white/10 rounded-lg text-xs px-3 py-2 text-slate-300 focus:outline-none">
-                            <option value="all">All Status</option>
-                            <option value="arrived">Arrived</option>
-                            <option value="coming-soon">Pending</option>
-                            <option value="absent">Absent</option>
-                        </select>
-                        <select value={initialFilterType} onChange={(e) => setFilterType(e.target.value)} className="bg-slate-950 border border-white/10 rounded-lg text-xs px-3 py-2 text-slate-300 focus:outline-none">
-                            <option value="all">All Types</option>
-                            <option value="Classic">Classic</option>
-                            <option value="Diamond">VIP</option>
-                            <option value="Gold">VVIP</option>
-                            <option value="Special">Special (Grouped)</option>
-                        </select>
-                        
-                        <button onClick={toggleSelectionMode} className={`p-2 rounded-lg border ${isSelectionMode ? 'bg-blue-600 border-blue-600 text-white' : 'border-white/10 text-slate-400'}`}>
-                            <CheckSquare className="w-4 h-4" />
+                    <button onClick={toggleSelectionMode} className={`p-2 rounded-lg border ${isSelectionMode ? 'bg-blue-600 border-blue-600 text-white' : 'border-white/10 text-slate-400'}`}>
+                        <CheckSquare className="w-4 h-4" />
+                    </button>
+                    
+                    {/* Delete Only Visible if Needed */}
+                    {isSelectionMode && selectedIds.size > 0 && (
+                        <button onClick={handleDelete} className="p-2 rounded-lg border border-red-500/20 bg-red-500/10 text-red-400">
+                            <Trash2 className="w-4 h-4" />
                         </button>
-                        
-                        {isSelectionMode && selectedIds.size > 0 && (
-                            <button onClick={handleDelete} className="p-2 rounded-lg border border-red-500/20 bg-red-500/10 text-red-400">
-                                <Trash2 className="w-4 h-4" />
-                            </button>
-                        )}
-                    </div>
+                    )}
                 </div>
 
-                {/* ROW 2: Import / Export - Aligned to the RIGHT (justify-end) */}
-                <div className="flex flex-wrap gap-3 border-t border-white/5 pt-4 justify-end">
+                {/* ROW 3: Import / Export (Centered) */}
+                <div className="flex flex-wrap gap-3 border-t border-white/5 pt-4 justify-center">
                      
                      {/* IMPORT BUTTON */}
                      <button onClick={() => setIsImportModalOpen(true)} className="flex items-center gap-2 px-4 py-2 rounded-lg border border-white/10 text-slate-300 hover:bg-white/5 text-sm font-medium transition-colors">
@@ -560,12 +562,12 @@ function GuestListModule({ tickets, initialFilterStatus, initialFilterType, init
                             className="flex items-center gap-2 px-4 py-2 rounded-lg border border-white/10 text-slate-300 hover:bg-white/5 text-sm font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:bg-transparent"
                         >
                             <Download className="w-4 h-4" />
-                            <span>Export Selected {selectedIds.size > 0 ? `(${selectedIds.size})` : ''}</span>
+                            <span>Export Data {selectedIds.size > 0 ? `(${selectedIds.size})` : ''}</span>
                             <ChevronDown className="w-3 h-3 ml-1 opacity-50" />
                         </button>
                         
                         {isExportMenuOpen && (
-                            <div className="absolute top-full mt-2 right-0 w-40 bg-slate-900 border border-white/10 rounded-xl shadow-2xl z-50 overflow-hidden flex flex-col p-1 animate-in fade-in zoom-in-95 duration-200">
+                            <div className="absolute top-full mt-2 left-1/2 -translate-x-1/2 w-40 bg-slate-900 border border-white/10 rounded-xl shadow-2xl z-50 overflow-hidden flex flex-col p-1 animate-in fade-in zoom-in-95 duration-200">
                                 {['json','csv','xlsx','docx','txt','pdf'].map(fmt => (
                                     <button key={fmt} onClick={() => handleExport(fmt)} className="px-3 py-2 text-xs text-left text-slate-300 hover:bg-white/10 rounded uppercase font-medium flex items-center justify-between group">
                                         <span>.{fmt}</span>
@@ -691,32 +693,34 @@ function LogsModule({ logs }) {
 
     return (
         <div className="space-y-4">
-            <div className="flex flex-col md:flex-row gap-4 bg-slate-900/40 p-4 rounded-2xl border border-white/5">
-                <div className="relative flex-1">
-                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-                   <input type="text" placeholder="Search logs..." value={search} onChange={e => setSearch(e.target.value)}
-                     className="w-full bg-slate-950 border border-white/10 rounded-xl py-2 pl-10 pr-4 text-sm focus:outline-none focus:border-blue-500 text-white" />
-                </div>
+            <div className="flex flex-col md:flex-row gap-4 bg-slate-900/40 p-4 rounded-2xl border border-white/5 items-center justify-between">
                 
-                {/* Controls - Moved Select/Delete to RIGHT */}
-                <div className="flex gap-2 justify-end">
-                    <select value={filter} onChange={(e) => setFilter(e.target.value)} className="bg-slate-950 border border-white/10 rounded-lg text-xs px-3 py-2 text-slate-300 focus:outline-none">
+                {/* LEFT SIDE: Search + Dropdown */}
+                <div className="flex flex-col sm:flex-row gap-2 flex-1 w-full md:w-auto">
+                   <div className="relative flex-1">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                        <input type="text" placeholder="Search logs..." value={search} onChange={e => setSearch(e.target.value)}
+                            className="w-full bg-slate-950 border border-white/10 rounded-xl py-2 pl-10 pr-4 text-sm focus:outline-none focus:border-blue-500 text-white" />
+                   </div>
+                   <select value={filter} onChange={(e) => setFilter(e.target.value)} className="bg-slate-950 border border-white/10 rounded-lg text-xs px-3 py-2 text-slate-300 focus:outline-none w-full sm:w-auto">
                         <option value="all">All Actions</option>
                         <option value="LOGIN">Login</option>
                         <option value="TICKET_CREATE">Ticket Create</option>
                         <option value="SCAN_ENTRY">Scan Entry</option>
                         <option value="CONFIG_CHANGE">Config Change</option>
                     </select>
-                    
-                    <button onClick={toggleSelectionMode} className={`p-2 rounded-lg border ${isSelectionMode ? 'bg-blue-600 border-blue-600 text-white' : 'border-white/10 text-slate-400'}`}>
-                        <CheckSquare className="w-4 h-4" />
-                    </button>
-                    
+                </div>
+                
+                {/* RIGHT SIDE: Delete + Select */}
+                <div className="flex gap-2">
                     {isSelectionMode && selectedIds.size > 0 && (
                         <button onClick={handleDelete} className="p-2 rounded-lg border border-red-500/20 bg-red-500/10 text-red-400">
                             <Trash2 className="w-4 h-4" />
                         </button>
                     )}
+                    <button onClick={toggleSelectionMode} className={`p-2 rounded-lg border ${isSelectionMode ? 'bg-blue-600 border-blue-600 text-white' : 'border-white/10 text-slate-400'}`}>
+                        <CheckSquare className="w-4 h-4" />
+                    </button>
                 </div>
             </div>
 
