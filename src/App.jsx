@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from 'firebase/auth';
 import { getFirestore, collection, onSnapshot, query, orderBy, doc, deleteDoc, writeBatch, updateDoc, setDoc, where, getDocs } from 'firebase/firestore';
@@ -8,7 +8,7 @@ import {
 import { 
   LayoutDashboard, Users, Logs, Settings, Search, Shield, Ticket, 
   UserCheck, Clock, Lock, LogOut, Menu, X, ChevronRight, Smartphone, LogIn,
-  Filter, Download, Upload, Trash2, MoreVertical, CheckSquare, Square, Crown, FileText, ChevronDown, X as CloseIcon
+  Filter, Download, Upload, Trash2, MoreVertical, CheckSquare, Square, Crown, FileText, ChevronDown, X as CloseIcon, Terminal, Copy, Play
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
@@ -197,6 +197,8 @@ function DashboardLayout({ user }) {
           <DesktopNavItem icon={Users} label="Guests" active={activeTab === 'guests'} onClick={() => setActiveTab('guests')} />
           <DesktopNavItem icon={Logs} label="Logs" active={activeTab === 'logs'} onClick={() => setActiveTab('logs')} />
           <DesktopNavItem icon={Settings} label="Config" active={activeTab === 'settings'} onClick={() => setActiveTab('settings')} />
+          {/* New Console Tab Link */}
+          <DesktopNavItem icon={Terminal} label="Console" active={activeTab === 'console'} onClick={() => setActiveTab('console')} />
         </nav>
       </aside>
 
@@ -306,6 +308,11 @@ function DashboardLayout({ user }) {
              <LogsModule logs={logs} />
           )}
 
+          {/* TAB: CONSOLE */}
+          {activeTab === 'console' && (
+             <ConsoleModule currentUser={user} />
+          )}
+
           {/* TAB: SETTINGS */}
           {activeTab === 'settings' && (
              <SettingsModule settings={settings} currentUser={user} />
@@ -319,10 +326,178 @@ function DashboardLayout({ user }) {
         <MobileNavItem icon={LayoutDashboard} label="Home" active={activeTab === 'overview'} onClick={() => setActiveTab('overview')} />
         <MobileNavItem icon={Users} label="Guests" active={activeTab === 'guests'} onClick={() => setActiveTab('guests')} />
         <MobileNavItem icon={Logs} label="Logs" active={activeTab === 'logs'} onClick={() => setActiveTab('logs')} />
+        <MobileNavItem icon={Terminal} label="Console" active={activeTab === 'console'} onClick={() => setActiveTab('console')} />
         <MobileNavItem icon={Settings} label="Config" active={activeTab === 'settings'} onClick={() => setActiveTab('settings')} />
       </nav>
     </div>
   );
+}
+
+// ===========================================
+// SUB-MODULE: CONSOLE (NEW)
+// ===========================================
+function ConsoleModule({ currentUser }) {
+    const [formData, setFormData] = useState({ username: '', name: '', role: 'Staff' });
+    const [terminalLines, setTerminalLines] = useState([
+        { type: 'info', text: 'System Console v1.0.2 Ready...' },
+        { type: 'info', text: 'Connected to Firestore Instance.' }
+    ]);
+    const [currentCommand, setCurrentCommand] = useState('');
+    const bottomRef = useRef(null);
+
+    const generateCommand = () => {
+        if(!formData.username || !formData.name) return;
+        const cmd = `createStaffUser("${formData.username}", "${formData.name}", "${formData.role}")`;
+        setCurrentCommand(cmd);
+        // Simulate typing into terminal
+        // Focus on input would go here if it was a real input
+    };
+
+    const runCommand = async () => {
+        if(!currentCommand) return;
+        
+        // Log the input
+        setTerminalLines(prev => [...prev, { type: 'input', text: `> ${currentCommand}` }]);
+        
+        // Parse the command
+        // Expected format: createStaffUser("user", "name", "role")
+        const regex = /createStaffUser\s*\(\s*"([^"]+)"\s*,\s*"([^"]+)"\s*,\s*"([^"]+)"\s*\)/;
+        const match = currentCommand.match(regex);
+
+        if(match) {
+            const [_, username, name, role] = match;
+            
+            try {
+                // Execute Database Write (Simulating the web app function)
+                await setDoc(doc(db, 'allowed_usernames', username), {
+                    name: name,
+                    role: role,
+                    createdBy: currentUser.email,
+                    createdAt: Date.now()
+                });
+                setTerminalLines(prev => [...prev, { type: 'success', text: `✓ User '${username}' created successfully.` }]);
+            } catch (err) {
+                setTerminalLines(prev => [...prev, { type: 'error', text: `x Error: ${err.message}` }]);
+            }
+        } else {
+            setTerminalLines(prev => [...prev, { type: 'error', text: `x Syntax Error: Unknown command format.` }]);
+        }
+
+        setCurrentCommand(''); // Clear input line
+        // Scroll to bottom
+        setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
+    };
+
+    const copyToClipboard = () => {
+        if(currentCommand) {
+            navigator.clipboard.writeText(currentCommand);
+            alert("Command copied to clipboard!");
+        }
+    };
+
+    return (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-[calc(100vh-140px)]">
+            {/* Input Form */}
+            <div className="bg-slate-900/40 border border-white/5 rounded-2xl p-6 h-fit">
+                <h2 className="text-lg font-medium text-white mb-4 flex items-center gap-2">
+                    <Users className="w-5 h-5 text-blue-400" />
+                    New User Parameters
+                </h2>
+                <div className="space-y-4">
+                    <div className="space-y-1">
+                        <label className="text-xs uppercase text-slate-500 font-semibold ml-1">Username (Email)</label>
+                        <input 
+                            type="text" 
+                            value={formData.username}
+                            onChange={e => setFormData({...formData, username: e.target.value})}
+                            placeholder="user@example.com"
+                            className="w-full bg-slate-950 border border-white/10 rounded-xl p-3 text-sm text-white focus:outline-none focus:border-blue-500"
+                        />
+                    </div>
+                    <div className="space-y-1">
+                        <label className="text-xs uppercase text-slate-500 font-semibold ml-1">Staff Name</label>
+                        <input 
+                            type="text" 
+                            value={formData.name}
+                            onChange={e => setFormData({...formData, name: e.target.value})}
+                            placeholder="John Doe"
+                            className="w-full bg-slate-950 border border-white/10 rounded-xl p-3 text-sm text-white focus:outline-none focus:border-blue-500"
+                        />
+                    </div>
+                    <div className="space-y-1">
+                        <label className="text-xs uppercase text-slate-500 font-semibold ml-1">Role</label>
+                        <select 
+                            value={formData.role}
+                            onChange={e => setFormData({...formData, role: e.target.value})}
+                            className="w-full bg-slate-950 border border-white/10 rounded-xl p-3 text-sm text-white focus:outline-none focus:border-blue-500"
+                        >
+                            <option value="Staff">Staff</option>
+                            <option value="Admin">Admin</option>
+                            <option value="Security">Security</option>
+                            <option value="Manager">Manager</option>
+                        </select>
+                    </div>
+                    
+                    <button 
+                        onClick={generateCommand}
+                        disabled={!formData.username || !formData.name}
+                        className="w-full py-3 rounded-xl bg-blue-600 text-white font-medium hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed mt-4 transition-colors"
+                    >
+                        Generate Command
+                    </button>
+                </div>
+            </div>
+
+            {/* Terminal Output */}
+            <div className="lg:col-span-2 bg-black border border-white/10 rounded-2xl flex flex-col overflow-hidden shadow-2xl font-mono text-sm relative">
+                {/* Terminal Header */}
+                <div className="bg-slate-900/80 border-b border-white/10 px-4 py-2 flex items-center gap-2">
+                    <Terminal className="w-4 h-4 text-emerald-500" />
+                    <span className="text-slate-400 text-xs">admin@dashboard:~/console</span>
+                </div>
+
+                {/* Terminal Body */}
+                <div className="flex-1 p-4 overflow-y-auto space-y-1 text-slate-300">
+                    {terminalLines.map((line, idx) => (
+                        <div key={idx} className={`${line.type === 'error' ? 'text-red-400' : line.type === 'success' ? 'text-emerald-400' : line.type === 'input' ? 'text-white font-bold' : 'text-slate-500'}`}>
+                            {line.text}
+                        </div>
+                    ))}
+                    <div ref={bottomRef} />
+                </div>
+
+                {/* Active Input Line */}
+                <div className="bg-slate-900/50 p-4 border-t border-white/10 flex items-center gap-3">
+                    <span className="text-emerald-500 font-bold">{">"}</span>
+                    <input 
+                        type="text" 
+                        value={currentCommand}
+                        onChange={e => setCurrentCommand(e.target.value)}
+                        onKeyDown={e => e.key === 'Enter' && runCommand()}
+                        className="flex-1 bg-transparent border-none outline-none text-white placeholder:text-slate-700"
+                        placeholder="Waiting for command..."
+                    />
+                    
+                    <div className="flex items-center gap-1">
+                        <button 
+                            onClick={copyToClipboard}
+                            title="Copy Command"
+                            className="p-2 hover:bg-white/10 rounded text-slate-400 hover:text-white transition-colors"
+                        >
+                            <Copy className="w-4 h-4" />
+                        </button>
+                        <button 
+                            onClick={runCommand}
+                            title="Run Command"
+                            className="p-2 hover:bg-emerald-500/20 rounded text-emerald-500 transition-colors"
+                        >
+                            <Play className="w-4 h-4" />
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
 }
 
 // ===========================================
@@ -515,7 +690,7 @@ function GuestListModule({ tickets, initialFilterStatus, initialFilterType, init
 
     return (
         <div className="space-y-4">
-            {/* Toolbar - Single Line, Full Width Row 2 */}
+            {/* Toolbar - Centered Layout */}
             <div className="bg-slate-900/40 p-4 rounded-2xl border border-white/5 flex flex-col gap-4 relative z-20">
                 
                 {/* ROW 1: Search (Full Width) */}
@@ -527,7 +702,7 @@ function GuestListModule({ tickets, initialFilterStatus, initialFilterType, init
                     </div>
                 </div>
                 
-                {/* ROW 2: Filters & Select (Single Line, Full Width) */}
+                {/* ROW 2: Filters & Select (Full Width & Equal Height) */}
                 <div className="flex gap-2 w-full">
                     <select value={initialFilterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="bg-slate-950 border border-white/10 rounded-xl text-sm px-3 py-2.5 text-slate-300 focus:outline-none flex-1 min-w-0">
                         <option value="all">All Status</option>
