@@ -518,7 +518,7 @@ function GuestListModule({ tickets, initialFilterStatus, initialFilterType, init
                 </div>
                 
                 {/* ROW 2: Filters & Select (Centered) */}
-                <div className="flex gap-2 w-full justify-center">
+                <div className="flex gap-2 w-full justify-center flex-wrap">
                     <select value={initialFilterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="bg-slate-950 border border-white/10 rounded-lg text-xs px-3 py-2 text-slate-300 focus:outline-none">
                         <option value="all">All Status</option>
                         <option value="arrived">Arrived</option>
@@ -713,11 +713,18 @@ function LogsModule({ logs }) {
                 
                 {/* RIGHT SIDE: Delete + Select */}
                 <div className="flex gap-2">
-                    {isSelectionMode && selectedIds.size > 0 && (
-                        <button onClick={handleDelete} className="p-2 rounded-lg border border-red-500/20 bg-red-500/10 text-red-400">
-                            <Trash2 className="w-4 h-4" />
-                        </button>
-                    )}
+                    <button 
+                        onClick={handleDelete} 
+                        disabled={selectedIds.size === 0} 
+                        className={`p-2 rounded-lg border transition-all ${
+                            selectedIds.size > 0 
+                            ? 'border-red-500/20 bg-red-500/10 text-red-400 cursor-pointer' 
+                            : 'border-white/5 text-slate-600 opacity-50 cursor-not-allowed'
+                        }`}
+                    >
+                        <Trash2 className="w-4 h-4" />
+                    </button>
+
                     <button onClick={toggleSelectionMode} className={`p-2 rounded-lg border ${isSelectionMode ? 'bg-blue-600 border-blue-600 text-white' : 'border-white/10 text-slate-400'}`}>
                         <CheckSquare className="w-4 h-4" />
                     </button>
@@ -725,40 +732,42 @@ function LogsModule({ logs }) {
             </div>
 
             <div className="bg-slate-900/40 border border-white/5 rounded-2xl overflow-hidden">
-                <table className="w-full text-left text-sm text-slate-400">
-                    <thead className="bg-white/5 text-slate-200 uppercase text-xs">
-                      <tr>
-                        {isSelectionMode && (
-                            <th className="p-4 w-10">
-                                <button onClick={toggleSelectAll}>
-                                    {selectedIds.size === filteredLogs.length && filteredLogs.length > 0 ? <CheckSquare className="w-4 h-4 text-blue-500"/> : <Square className="w-4 h-4"/>}
-                                </button>
-                            </th>
-                        )}
-                        <th className="p-4">Time</th>
-                        <th className="p-4">User</th>
-                        <th className="p-4">Action</th>
-                        <th className="p-4">Details</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-white/5">
-                      {filteredLogs.map(log => (
-                        <tr key={log.id} className={`hover:bg-white/5 ${selectedIds.has(log.id) ? 'bg-blue-500/5' : ''}`}>
-                           {isSelectionMode && (
-                                <td className="p-4 text-center">
-                                    <button onClick={() => toggleSelect(log.id)}>
-                                        {selectedIds.has(log.id) ? <CheckSquare className="w-4 h-4 text-blue-500"/> : <Square className="w-4 h-4"/>}
+                <div className="overflow-x-auto">
+                    <table className="w-full text-left text-sm text-slate-400 whitespace-nowrap">
+                        <thead className="bg-white/5 text-slate-200 uppercase text-xs">
+                        <tr>
+                            {isSelectionMode && (
+                                <th className="p-4 w-10">
+                                    <button onClick={toggleSelectAll}>
+                                        {selectedIds.size === filteredLogs.length && filteredLogs.length > 0 ? <CheckSquare className="w-4 h-4 text-blue-500"/> : <Square className="w-4 h-4"/>}
                                     </button>
-                                </td>
-                           )}
-                           <td className="p-4 whitespace-nowrap">{new Date(log.timestamp).toLocaleString()}</td>
-                           <td className="p-4 text-blue-400">{log.username}</td>
-                           <td className="p-4"><ActionBadge action={log.action} /></td>
-                           <td className="p-4 truncate max-w-md">{log.details}</td>
+                                </th>
+                            )}
+                            <th className="p-4">Time</th>
+                            <th className="p-4">User</th>
+                            <th className="p-4">Action</th>
+                            <th className="p-4">Details</th>
                         </tr>
-                      ))}
-                    </tbody>
-                </table>
+                        </thead>
+                        <tbody className="divide-y divide-white/5">
+                        {filteredLogs.map(log => (
+                            <tr key={log.id} className={`hover:bg-white/5 ${selectedIds.has(log.id) ? 'bg-blue-500/5' : ''}`}>
+                            {isSelectionMode && (
+                                    <td className="p-4 text-center">
+                                        <button onClick={() => toggleSelect(log.id)}>
+                                            {selectedIds.has(log.id) ? <CheckSquare className="w-4 h-4 text-blue-500"/> : <Square className="w-4 h-4"/>}
+                                        </button>
+                                    </td>
+                            )}
+                            <td className="p-4 whitespace-nowrap">{new Date(log.timestamp).toLocaleString()}</td>
+                            <td className="p-4 text-blue-400">{log.username}</td>
+                            <td className="p-4"><ActionBadge action={log.action} /></td>
+                            <td className="p-4 max-w-md">{log.details}</td>
+                            </tr>
+                        ))}
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
     );
