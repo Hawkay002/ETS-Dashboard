@@ -382,24 +382,37 @@ function GuestListModule({ tickets, initialFilterStatus, initialFilterType, init
         setIsSelectionMode(false);
     };
 
-    // -- EXPORT HANDLER (6 Formats) - EXPORTS ONLY SELECTED --
+    // -- EXPORT HANDLER (Full Schema) --
     const handleExport = async (format) => {
         setIsExportMenuOpen(false);
-        // Only get tickets that are in the selectedIds set
         const exportSubset = tickets.filter(t => selectedIds.has(t.id));
+        if (exportSubset.length === 0) return;
 
-        if (exportSubset.length === 0) return; // Should be prevented by UI, but safe check
+        const data = exportSubset.map((t, index) => {
+            let displayType = 'Classic';
+            if (t.ticketType === 'Gold') displayType = 'VVIP';
+            else if (t.ticketType === 'Diamond') displayType = 'VIP';
 
-        const data = exportSubset.map(t => ({
-            Name: t.name,
-            Type: t.ticketType || 'Classic',
-            Phone: t.phone,
-            Status: t.status,
-            ID: t.id,
-            Entry: t.scannedAt ? new Date(t.scannedAt).toLocaleString() : ''
-        }));
+            return {
+                s_no: index + 1,
+                ticket_type: displayType,
+                id: t.id,
+                age: t.age || '',
+                scannedAt: t.scannedAt || null,
+                status: t.status,
+                phone: t.phone,
+                ticketType: t.ticketType || 'Classic',
+                createdAt: t.createdAt,
+                gender: t.gender || '',
+                name: t.name,
+                createdBy: t.createdBy || 'ADMIN',
+                scanned: t.status === 'arrived',
+                scannedBy: t.scannedBy || ''
+            };
+        });
 
         const fileName = `GuestList_Selected_${new Date().toISOString().split('T')[0]}`;
+        const fields = ['s_no', 'ticket_type', 'id', 'age', 'scannedAt', 'status', 'phone', 'ticketType', 'createdAt', 'gender', 'name', 'createdBy', 'scanned', 'scannedBy'];
 
         switch (format) {
             case 'json': {
@@ -408,14 +421,14 @@ function GuestListModule({ tickets, initialFilterStatus, initialFilterType, init
                 break;
             }
             case 'csv': {
-                const ws = XLSX.utils.json_to_sheet(data);
+                const ws = XLSX.utils.json_to_sheet(data, { header: fields });
                 const csv = XLSX.utils.sheet_to_csv(ws);
                 const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
                 saveAs(blob, `${fileName}.csv`);
                 break;
             }
             case 'xlsx': {
-                const ws = XLSX.utils.json_to_sheet(data);
+                const ws = XLSX.utils.json_to_sheet(data, { header: fields });
                 const wb = XLSX.utils.book_new();
                 XLSX.utils.book_append_sheet(wb, ws, "Guests");
                 XLSX.writeFile(wb, `${fileName}.xlsx`);
@@ -423,48 +436,53 @@ function GuestListModule({ tickets, initialFilterStatus, initialFilterType, init
             }
             case 'txt': {
                 const txt = data.map(row => 
-                    `Name: ${row.Name} | Type: ${row.Type} | Phone: ${row.Phone} | Status: ${row.Status}`
+                    Object.entries(row).map(([k, v]) => `${k}: ${v}`).join(' | ')
                 ).join('\n');
                 const blob = new Blob([txt], { type: 'text/plain;charset=utf-8' });
                 saveAs(blob, `${fileName}.txt`);
                 break;
             }
             case 'pdf': {
-                const doc = new jsPDF();
-                doc.text("Selected Guest List", 14, 20);
+                const doc = new jsPDF('l', 'mm', 'a4');
+                doc.setFontSize(8);
+                doc.text("Guest List Data Export", 14, 15);
+                const rows = data.map(row => Object.values(row).map(v => String(v)));
                 doc.autoTable({
-                    head: [['Name', 'Type', 'Phone', 'Status', 'Entry']],
-                    body: data.map(d => [d.Name, d.Type, d.Phone, d.Status, d.Entry]),
-                    startY: 25
+                    head: [fields],
+                    body: rows,
+                    startY: 20,
+                    styles: { fontSize: 6, cellPadding: 1, overflow: 'linebreak' },
+                    columnStyles: { 2: { cellWidth: 15 } } 
                 });
                 doc.save(`${fileName}.pdf`);
                 break;
             }
             case 'docx': {
+                const headerRow = new TableRow({
+                    children: fields.map(f => 
+                        new TableCell({ 
+                            children: [new Paragraph({ text: f, bold: true, size: 12 })],
+                            width: { size: 100 / fields.length, type: WidthType.PERCENTAGE }
+                        })
+                    )
+                });
+                const dataRows = data.map(row => 
+                    new TableRow({
+                        children: Object.values(row).map(val => 
+                            new TableCell({ 
+                                children: [new Paragraph({ text: String(val || ""), size: 12 })],
+                                width: { size: 100 / fields.length, type: WidthType.PERCENTAGE }
+                            })
+                        )
+                    })
+                );
                 const doc = new Document({
                     sections: [{
                         properties: {},
                         children: [
-                            new Paragraph({
-                                text: "Selected Guest List",
-                                heading: HeadingLevel.HEADING_1,
-                                spacing: { after: 200 },
-                            }),
+                            new Paragraph({ text: "Guest List Data Export", heading: HeadingLevel.HEADING_1 }),
                             new Table({
-                                rows: [
-                                    new TableRow({
-                                        children: ['Name', 'Type', 'Phone', 'Status', 'Entry'].map(header => 
-                                            new TableCell({ children: [new Paragraph({ text: header, bold: true })] })
-                                        ),
-                                    }),
-                                    ...data.map(row => 
-                                        new TableRow({
-                                            children: [row.Name, row.Type, row.Phone, row.Status, row.Entry].map(cell => 
-                                                new TableCell({ children: [new Paragraph({ text: cell || "-" })] })
-                                            ),
-                                        })
-                                    )
-                                ],
+                                rows: [headerRow, ...dataRows],
                                 width: { size: 100, type: WidthType.PERCENTAGE },
                             }),
                         ],
@@ -479,17 +497,14 @@ function GuestListModule({ tickets, initialFilterStatus, initialFilterType, init
 
     return (
         <div className="space-y-4">
-            {/* Toolbar - Split into 2 rows, z-20 for dropdown overlap */}
+            {/* Toolbar */}
             <div className="bg-slate-900/40 p-4 rounded-2xl border border-white/5 flex flex-col gap-4 relative z-20">
-                
-                {/* ROW 1: Search & Filters */}
                 <div className="flex flex-col md:flex-row gap-4 justify-between items-start md:items-center">
                     <div className="relative flex-1 w-full md:w-auto">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
                         <input type="text" placeholder="Search guests..." value={search} onChange={e => setSearch(e.target.value)}
                         className="w-full bg-slate-950 border border-white/10 rounded-xl py-2 pl-10 pr-4 text-sm focus:outline-none focus:border-blue-500 text-white placeholder:text-slate-600" />
                     </div>
-                    
                     <div className="flex gap-2 flex-wrap w-full md:w-auto justify-end">
                         <select value={initialFilterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="bg-slate-950 border border-white/10 rounded-lg text-xs px-3 py-2 text-slate-300 focus:outline-none">
                             <option value="all">All Status</option>
@@ -504,12 +519,9 @@ function GuestListModule({ tickets, initialFilterStatus, initialFilterType, init
                             <option value="Gold">VVIP</option>
                             <option value="Special">Special (Grouped)</option>
                         </select>
-                        
                         <button onClick={() => setIsSelectionMode(!isSelectionMode)} className={`p-2 rounded-lg border ${isSelectionMode ? 'bg-blue-600 border-blue-600 text-white' : 'border-white/10 text-slate-400'}`}>
                             <CheckSquare className="w-4 h-4" />
                         </button>
-                        
-                        {/* Show delete only if items selected */}
                         {isSelectionMode && selectedIds.size > 0 && (
                             <button onClick={handleDelete} className="p-2 rounded-lg border border-red-500/20 bg-red-500/10 text-red-400">
                                 <Trash2 className="w-4 h-4" />
@@ -517,17 +529,11 @@ function GuestListModule({ tickets, initialFilterStatus, initialFilterType, init
                         )}
                     </div>
                 </div>
-
-                {/* ROW 2: Import / Export - Full width separation line */}
                 <div className="flex flex-wrap gap-3 border-t border-white/5 pt-4">
-                     
-                     {/* IMPORT BUTTON - Left Side */}
                      <button onClick={() => setIsImportModalOpen(true)} className="flex items-center gap-2 px-4 py-2 rounded-lg border border-white/10 text-slate-300 hover:bg-white/5 text-sm font-medium transition-colors">
                         <Upload className="w-4 h-4" />
                         <span>Import Data</span>
                      </button>
-
-                     {/* EXPORT BUTTON - Right Side (Disabled if 0 selected) */}
                      <div className="relative">
                         <button 
                             disabled={selectedIds.size === 0} 
@@ -538,8 +544,6 @@ function GuestListModule({ tickets, initialFilterStatus, initialFilterType, init
                             <span>Export Selected {selectedIds.size > 0 ? `(${selectedIds.size})` : ''}</span>
                             <ChevronDown className="w-3 h-3 ml-1 opacity-50" />
                         </button>
-                        
-                        {/* Dropdown Menu - Positioned absolute z-50 to float over table */}
                         {isExportMenuOpen && (
                             <div className="absolute top-full mt-2 left-0 w-40 bg-slate-900 border border-white/10 rounded-xl shadow-2xl z-50 overflow-hidden flex flex-col p-1 animate-in fade-in zoom-in-95 duration-200">
                                 {['json','csv','xlsx','docx','txt','pdf'].map(fmt => (
@@ -551,7 +555,6 @@ function GuestListModule({ tickets, initialFilterStatus, initialFilterType, init
                             </div>
                         )}
                      </div>
-
                 </div>
             </div>
 
@@ -560,51 +563,59 @@ function GuestListModule({ tickets, initialFilterStatus, initialFilterType, init
 
             {/* List */}
             <div className="bg-slate-900/40 border border-white/5 rounded-2xl overflow-hidden relative z-10">
-                <table className="w-full text-left text-sm text-slate-400">
-                  <thead className="bg-white/5 text-slate-200 uppercase text-xs">
-                    <tr>
-                        {isSelectionMode && (
-                            <th className="p-4 w-10">
-                                <button onClick={toggleSelectAll}>
-                                    {selectedIds.size === filteredTickets.length && filteredTickets.length > 0 ? <CheckSquare className="w-4 h-4 text-blue-500"/> : <Square className="w-4 h-4"/>}
-                                </button>
-                            </th>
-                        )}
-                        <th className="p-4">Name</th>
-                        <th className="p-4">Type</th>
-                        <th className="p-4 hidden md:table-cell">Contact</th>
-                        <th className="p-4">Status / Time</th>
-                        <th className="p-4 text-right">ID</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-white/5">
-                    {filteredTickets.map(t => (
-                      <tr key={t.id} className={`hover:bg-white/5 ${selectedIds.has(t.id) ? 'bg-blue-500/5' : ''}`}>
-                        {isSelectionMode && (
-                            <td className="p-4 text-center">
-                                <button onClick={() => toggleSelect(t.id)}>
-                                    {selectedIds.has(t.id) ? <CheckSquare className="w-4 h-4 text-blue-500"/> : <Square className="w-4 h-4"/>}
-                                </button>
+                <div className="overflow-x-auto">
+                    <table className="w-full text-left text-sm text-slate-400 whitespace-nowrap">
+                      <thead className="bg-white/5 text-slate-200 uppercase text-xs">
+                        <tr>
+                            {isSelectionMode && (
+                                <th className="p-4 w-10">
+                                    <button onClick={toggleSelectAll}>
+                                        {selectedIds.size === filteredTickets.length && filteredTickets.length > 0 ? <CheckSquare className="w-4 h-4 text-blue-500"/> : <Square className="w-4 h-4"/>}
+                                    </button>
+                                </th>
+                            )}
+                            <th className="p-4">Name</th>
+                            <th className="p-4">Type</th>
+                            <th className="p-4">Contact</th>
+                            <th className="p-4">Gender</th>
+                            <th className="p-4">Age</th>
+                            <th className="p-4">Status / Time</th>
+                            <th className="p-4">Scanned By</th>
+                            <th className="p-4 text-right">ID</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-white/5">
+                        {filteredTickets.map(t => (
+                          <tr key={t.id} className={`hover:bg-white/5 ${selectedIds.has(t.id) ? 'bg-blue-500/5' : ''}`}>
+                            {isSelectionMode && (
+                                <td className="p-4 text-center">
+                                    <button onClick={() => toggleSelect(t.id)}>
+                                        {selectedIds.has(t.id) ? <CheckSquare className="w-4 h-4 text-blue-500"/> : <Square className="w-4 h-4"/>}
+                                    </button>
+                                </td>
+                            )}
+                            <td className="p-4 font-medium text-white">{t.name}</td>
+                            <td className="p-4"><TypeBadge type={t.ticketType} /></td>
+                            <td className="p-4">{t.phone}</td>
+                            <td className="p-4">{t.gender || '-'}</td>
+                            <td className="p-4">{t.age || '-'}</td>
+                            <td className="p-4">
+                               <div className="flex flex-col">
+                                   <StatusBadge status={t.status} />
+                                   {t.status === 'arrived' && t.scannedAt && (
+                                       <span className="text-[10px] text-slate-500 mt-1 font-mono">
+                                           {new Date(t.scannedAt).toLocaleString([], {year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute:'2-digit'})}
+                                       </span>
+                                   )}
+                               </div>
                             </td>
-                        )}
-                        <td className="p-4 font-medium text-white">{t.name}</td>
-                        <td className="p-4"><TypeBadge type={t.ticketType} /></td>
-                        <td className="p-4 hidden md:table-cell">{t.phone}</td>
-                        <td className="p-4">
-                           <div className="flex flex-col">
-                               <StatusBadge status={t.status} />
-                               {t.status === 'arrived' && t.scannedAt && (
-                                   <span className="text-[10px] text-slate-500 mt-1 font-mono">
-                                       {new Date(t.scannedAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                                   </span>
-                               )}
-                           </div>
-                        </td>
-                        <td className="p-4 text-right font-mono text-xs opacity-50">{t.id.substring(0,6)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                            <td className="p-4 text-xs font-mono text-slate-500">{t.scannedBy || '-'}</td>
+                            <td className="p-4 text-right font-mono text-xs opacity-50">{t.id.substring(0,6)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                </div>
                 {filteredTickets.length === 0 && <div className="p-8 text-center text-slate-500 text-sm">No guests found</div>}
             </div>
         </div>
@@ -869,14 +880,21 @@ function ImportModal({ close, currentUser }) {
             for (const chunk of chunks) {
                 const batch = writeBatch(db);
                 chunk.forEach(row => {
-                    const ref = doc(collection(db, APP_COLLECTION_ROOT, SHARED_DATA_ID, 'tickets'));
+                    // Restore ID if present, else create new
+                    const ref = row.id ? doc(db, APP_COLLECTION_ROOT, SHARED_DATA_ID, 'tickets', row.id) : doc(collection(db, APP_COLLECTION_ROOT, SHARED_DATA_ID, 'tickets'));
+                    
                     batch.set(ref, {
-                        name: row.Name || row.name,
-                        phone: String(row.Phone || row.phone || ''),
-                        ticketType: row.Type || row.ticketType || 'Classic',
-                        status: 'coming-soon',
-                        createdAt: Date.now(),
-                        createdBy: currentUser.email
+                        name: row.name || row.Name,
+                        phone: String(row.phone || row.Phone || ''),
+                        ticketType: row.ticketType || row.Type || 'Classic',
+                        status: row.status || 'coming-soon',
+                        createdAt: row.createdAt || Date.now(),
+                        createdBy: row.createdBy || currentUser.email,
+                        age: row.age || '',
+                        gender: row.gender || '',
+                        scanned: row.scanned === 'true' || row.scanned === true || false,
+                        scannedBy: row.scannedBy || '',
+                        scannedAt: row.scannedAt || null
                     });
                 });
                 await batch.commit();
