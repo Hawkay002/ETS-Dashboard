@@ -10,7 +10,7 @@ import {
   UserCheck, Clock, Lock, LogOut, Menu, X, ChevronRight, Smartphone, LogIn,
   Filter, Download, Upload, Trash2, MoreVertical, CheckSquare, Square, Crown, 
   FileText, ChevronDown, X as CloseIcon, Terminal, Copy, Play, Save, Edit2, 
-  CheckCircle, AlertCircle, Eye, EyeOff, User, Unlock, AlertTriangle, PenTool, Wifi
+  CheckCircle, AlertCircle, Eye, EyeOff, Unlock, User, Wifi
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
@@ -290,7 +290,7 @@ function DashboardLayout({ user }) {
                 </div>
 
                 <div className="flex flex-col gap-4">
-                    {/* NEW STAFF STATUS CARD */}
+                    {/* STAFF STATUS CARD - NEW FEATURE */}
                     <StaffStatusCard onViewAll={() => setActiveTab('settings')} />
 
                     <div className="bg-slate-900/40 border border-white/5 rounded-2xl p-5 shadow-sm flex flex-col flex-1">
@@ -364,7 +364,7 @@ function DashboardLayout({ user }) {
 // ===========================================
 function StaffStatusCard({ onViewAll }) {
     const [staff, setStaff] = useState([]);
-    const [presence, setPresence] = useState({});
+    const [presenceData, setPresenceData] = useState([]); // Stores flat device data
     const [locks, setLocks] = useState({});
 
     useEffect(() => {
@@ -374,29 +374,35 @@ function StaffStatusCard({ onViewAll }) {
             setStaff(data);
         });
 
-        // 2. Fetch Presence (Live Heartbeat)
-        const unsubPresence = onSnapshot(collection(db, 'global_presence'), (snap) => {
-            // This is a simplified "last known" map. 
-            // In a real app with subcollections (devices), we need deep querying, 
-            // but for dashboard display, we'll try to aggregate if structure allows.
-            // Since the original JS uses subcollections 'devices', we need a way to monitor ALL.
-            // Firestore doesn't support recursive listener on client easily without Group Query.
-            // For now, we will just fetch the lock states properly and maybe mock presence 
-            // or rely on a top-level aggregation if available.
-            // *Implementation note*: We'll skip complex subcollection listening here to keep performance high
-            // and rely on manual refresh or a simplified structure if you adjust backend.
+        // 2. Fetch Presence: We need listeners for each managed user email
+        // Note: In React we should manage subscriptions carefully.
+        const presenceUnsubs = MANAGED_USERS.map(user => {
+            return onSnapshot(collection(db, 'global_presence', user.email, 'devices'), (snap) => {
+                 // Collect devices from this role email
+                 const devices = snap.docs.map(d => ({...d.data(), parentEmail: user.email}));
+                 // We update a central state. To avoid race conditions in simple state, we can use a functional update 
+                 // but simpler here: we just update a local cache and set state.
+                 // For robust dashboard, we'll just store all raw device data
+                 setPresenceData(prev => {
+                     // Filter out old entries for this email to avoid duplicates
+                     const others = prev.filter(d => d.parentEmail !== user.email);
+                     return [...others, ...devices];
+                 });
+            });
         });
-        
-        // 2b. ALTERNATIVE: Listener for Locks which is critical
+
+        // 3. Fetch Locks
         const unsubLocks = onSnapshot(collection(db, 'global_locks'), (snap) => {
             const lockMap = {};
-            snap.forEach(doc => {
-               lockMap[doc.id] = doc.data(); 
-            });
+            snap.forEach(doc => { lockMap[doc.id] = doc.data(); });
             setLocks(lockMap);
         });
 
-        return () => { unsubStaff(); unsubLocks(); };
+        return () => { 
+            unsubStaff(); 
+            unsubLocks();
+            presenceUnsubs.forEach(fn => fn()); 
+        };
     }, []);
 
     // Helper to group staff
@@ -409,29 +415,31 @@ function StaffStatusCard({ onViewAll }) {
         
         staff.forEach(s => {
             if (groups[s.role]) {
-                // Determine Lock Status
-                // Check userSpecificLocks in global_locks collection under the role email
+                // Determine Lock Status from Global Locks
                 let isLocked = false;
                 let lockReason = '';
                 
-                // Find the parent email for this role
-                const parentEmail = s.email; 
-                if (locks[parentEmail] && locks[parentEmail].userSpecificLocks && locks[parentEmail].userSpecificLocks[s.username]) {
-                    const specificLocks = locks[parentEmail].userSpecificLocks[s.username];
+                // Locks are stored under the Role Email (s.email) -> userSpecificLocks -> username
+                if (locks[s.email] && locks[s.email].userSpecificLocks && locks[s.email].userSpecificLocks[s.username]) {
+                    const specificLocks = locks[s.email].userSpecificLocks[s.username];
                     if (specificLocks && specificLocks.length > 0) {
                         isLocked = true;
-                        // Try to get metadata
-                        if (locks[parentEmail].lockMetadata && locks[parentEmail].lockMetadata[s.username]) {
-                            lockReason = locks[parentEmail].lockMetadata[s.username].type;
+                        if (locks[s.email].lockMetadata && locks[s.email].lockMetadata[s.username]) {
+                            lockReason = locks[s.email].lockMetadata[s.username].type;
                         }
                     }
                 }
                 
-                groups[s.role].push({ ...s, isLocked, lockReason });
+                // Determine Online Status
+                // Check if any device in presenceData matches this username and is recent
+                const now = Date.now();
+                const isOnline = presenceData.some(d => d.username === s.username && (now - d.lastSeen < 30000)); // 30s threshold
+
+                groups[s.role].push({ ...s, isLocked, lockReason, isOnline });
             }
         });
         return groups;
-    }, [staff, locks]);
+    }, [staff, locks, presenceData]);
 
     return (
         <div className="bg-slate-900/40 border border-white/5 rounded-2xl p-5 shadow-sm flex flex-col">
@@ -451,13 +459,13 @@ function StaffStatusCard({ onViewAll }) {
                                 {members.map(m => (
                                     <div key={m.username} className="bg-black/20 rounded-lg p-2 flex items-center justify-between">
                                         <div className="flex items-center gap-2 overflow-hidden">
-                                            <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse flex-shrink-0"></div>
-                                            <span className="text-xs text-slate-300 truncate">{m.username}</span>
+                                            {/* Status Dot */}
+                                            <div className={`w-2 h-2 rounded-full flex-shrink-0 ${m.isOnline ? 'bg-emerald-500 animate-pulse shadow-[0_0_5px_#10b981]' : 'bg-slate-700'}`}></div>
+                                            <span className={`text-xs truncate ${m.isOnline ? 'text-white' : 'text-slate-500'}`}>{m.username}</span>
                                         </div>
                                         {m.isLocked && (
-                                            <div className="flex items-center gap-1 text-[10px] text-red-400 bg-red-500/10 px-1.5 py-0.5 rounded border border-red-500/10">
+                                            <div className="flex items-center gap-1 text-[10px] text-red-400 bg-red-500/10 px-1.5 py-0.5 rounded border border-red-500/10" title={m.lockReason}>
                                                 <Lock className="w-3 h-3" />
-                                                <span className="hidden xl:inline capitalize">{m.lockReason || 'Locked'}</span>
                                             </div>
                                         )}
                                     </div>
@@ -636,9 +644,6 @@ function ConsoleModule({ currentUser }) {
 // SUB-MODULE: GUEST LIST
 // ===========================================
 function GuestListModule({ tickets, initialFilterStatus, initialFilterType, initialSort, setFilterStatus, setFilterType, setSort, currentUser }) {
-    // ... (Code identical to provided input, omitted for brevity but part of final file) ...
-    // Note: Re-paste the exact guest list code provided in the prompt here.
-    // I will include the structure to keep the file valid.
     const [search, setSearch] = useState('');
     const [selectedIds, setSelectedIds] = useState(new Set());
     const [isSelectionMode, setIsSelectionMode] = useState(false);
@@ -671,10 +676,117 @@ function GuestListModule({ tickets, initialFilterStatus, initialFilterType, init
     const confirmDelete = async () => { const b = writeBatch(db); selectedIds.forEach(id => b.delete(doc(db, APP_COLLECTION_ROOT, SHARED_DATA_ID, 'tickets', id))); await b.commit(); setSelectedIds(new Set()); setIsSelectionMode(false); setIsDeleteModalOpen(false); };
     const openExportModal = () => { setExportFileName(`GuestList_${new Date().toISOString().split('T')[0]}`); setIsExportModalOpen(true); };
     
-    // ... (Export handlers logic same as input) ...
+    // -- EXPORT HANDLER (Full Schema) --
     const handleExportProcess = async () => {
-         setIsExportModalOpen(false);
-         // Simplified implementation for brevity, assuming full logic is preserved
+        setIsExportModalOpen(false);
+        const exportSubset = tickets.filter(t => selectedIds.has(t.id));
+        if (exportSubset.length === 0) return;
+
+        const data = exportSubset.map((t, index) => {
+            let displayType = 'Classic';
+            if (t.ticketType === 'Gold') displayType = 'VVIP';
+            else if (t.ticketType === 'Diamond') displayType = 'VIP';
+
+            return {
+                s_no: index + 1,
+                ticket_type: displayType,
+                id: t.id,
+                age: t.age || '',
+                scannedAt: t.scannedAt || null,
+                status: t.status,
+                phone: t.phone,
+                ticketType: t.ticketType || 'Classic',
+                createdAt: t.createdAt,
+                gender: t.gender || '',
+                name: t.name,
+                createdBy: t.createdBy || 'ADMIN',
+                scanned: t.status === 'arrived',
+                scannedBy: t.scannedBy || ''
+            };
+        });
+
+        const fileName = exportFileName || `GuestList`;
+        const fields = ['s_no', 'ticket_type', 'id', 'age', 'scannedAt', 'status', 'phone', 'ticketType', 'createdAt', 'gender', 'name', 'createdBy', 'scanned', 'scannedBy'];
+
+        switch (exportFormat) {
+            case 'json': {
+                const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                saveAs(blob, `${fileName}.json`);
+                break;
+            }
+            case 'csv': {
+                const ws = XLSX.utils.json_to_sheet(data, { header: fields });
+                const csv = XLSX.utils.sheet_to_csv(ws);
+                const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                saveAs(blob, `${fileName}.csv`);
+                break;
+            }
+            case 'xlsx': {
+                const ws = XLSX.utils.json_to_sheet(data, { header: fields });
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, "Guests");
+                XLSX.writeFile(wb, `${fileName}.xlsx`);
+                break;
+            }
+            case 'txt': {
+                const txt = data.map(row => 
+                    Object.entries(row).map(([k, v]) => `${k}: ${v}`).join(' | ')
+                ).join('\n');
+                const blob = new Blob([txt], { type: 'text/plain;charset=utf-8' });
+                saveAs(blob, `${fileName}.txt`);
+                break;
+            }
+            case 'pdf': {
+                const doc = new jsPDF('l', 'mm', 'a4');
+                doc.setFontSize(8);
+                doc.text(fileName, 14, 15);
+                const rows = data.map(row => Object.values(row).map(v => String(v)));
+                doc.autoTable({
+                    head: [fields],
+                    body: rows,
+                    startY: 20,
+                    styles: { fontSize: 6, cellPadding: 1, overflow: 'linebreak' },
+                    columnStyles: { 2: { cellWidth: 15 } } 
+                });
+                doc.save(`${fileName}.pdf`);
+                break;
+            }
+            case 'docx': {
+                const headerRow = new TableRow({
+                    children: fields.map(f => 
+                        new TableCell({ 
+                            children: [new Paragraph({ text: f, bold: true, size: 12 })],
+                            width: { size: 100 / fields.length, type: WidthType.PERCENTAGE }
+                        })
+                    )
+                });
+                const dataRows = data.map(row => 
+                    new TableRow({
+                        children: Object.values(row).map(val => 
+                            new TableCell({ 
+                                children: [new Paragraph({ text: String(val || ""), size: 12 })],
+                                width: { size: 100 / fields.length, type: WidthType.PERCENTAGE }
+                            })
+                        )
+                    })
+                );
+                const doc = new Document({
+                    sections: [{
+                        properties: {},
+                        children: [
+                            new Paragraph({ text: fileName, heading: HeadingLevel.HEADING_1 }),
+                            new Table({
+                                rows: [headerRow, ...dataRows],
+                                width: { size: 100, type: WidthType.PERCENTAGE },
+                            }),
+                        ],
+                    }],
+                });
+                const blob = await Packer.toBlob(doc);
+                saveAs(blob, `${fileName}.docx`);
+                break;
+            }
+        }
     };
 
     return (
@@ -707,6 +819,50 @@ function GuestListModule({ tickets, initialFilterStatus, initialFilterType, init
                 </div>
             </div>
             
+            {/* Export Modal */}
+            {isExportModalOpen && (
+                <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm animate-in fade-in">
+                    <div className="bg-slate-900 border border-white/10 rounded-2xl p-6 w-full max-w-sm shadow-2xl relative">
+                        <button onClick={() => setIsExportModalOpen(false)} className="absolute top-4 right-4 text-slate-500 hover:text-white"><CloseIcon className="w-5 h-5" /></button>
+                        
+                        <h3 className="text-lg font-medium text-white mb-1">Export Data</h3>
+                        <p className="text-sm text-slate-500 mb-6">Exporting <span className="text-blue-400 font-bold">{selectedIds.size}</span> selected guests.</p>
+                        
+                        <div className="space-y-4">
+                            <div className="space-y-1">
+                                <label className="text-xs uppercase text-slate-500 font-semibold ml-1">Filename</label>
+                                <input 
+                                    type="text" 
+                                    value={exportFileName}
+                                    onChange={(e) => setExportFileName(e.target.value)}
+                                    className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-sm text-white focus:outline-none focus:border-blue-500 transition-colors"
+                                />
+                            </div>
+
+                            <div className="space-y-1">
+                                <label className="text-xs uppercase text-slate-500 font-semibold ml-1">Format</label>
+                                <div className="grid grid-cols-3 gap-2">
+                                    {['xlsx', 'csv', 'json', 'pdf', 'docx', 'txt'].map(fmt => (
+                                        <button 
+                                            key={fmt}
+                                            onClick={() => setExportFormat(fmt)}
+                                            className={`py-2 rounded-lg text-xs font-medium uppercase border transition-all ${exportFormat === fmt ? 'bg-blue-600 border-blue-500 text-white' : 'bg-white/5 border-white/5 text-slate-400 hover:bg-white/10'}`}
+                                        >
+                                            {fmt}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="flex gap-3 mt-8">
+                            <button onClick={() => setIsExportModalOpen(false)} className="flex-1 py-2.5 rounded-xl border border-white/10 text-slate-400 text-sm hover:bg-white/5 transition-colors">Cancel</button>
+                            <button onClick={handleExportProcess} className="flex-1 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-medium hover:bg-blue-500 transition-all shadow-lg shadow-blue-900/20">Download</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Table */}
              <div className="bg-slate-900/40 border border-white/5 rounded-2xl overflow-hidden relative z-10">
                 <div className="overflow-x-auto">
@@ -714,7 +870,7 @@ function GuestListModule({ tickets, initialFilterStatus, initialFilterType, init
                       <thead className="bg-white/5 text-slate-200 uppercase text-xs">
                         <tr>
                             {isSelectionMode && <th className="p-4 w-10"><button onClick={toggleSelectAll}>{selectedIds.size === filteredTickets.length && filteredTickets.length > 0 ? <CheckSquare className="w-4 h-4 text-blue-500"/> : <Square className="w-4 h-4"/>}</button></th>}
-                            <th className="p-4">Name</th><th className="p-4">Type</th><th className="p-4">Contact</th><th className="p-4">Status</th>
+                            <th className="p-4">Name</th><th className="p-4">Type</th><th className="p-4">Contact</th><th className="p-4">Gender</th><th className="p-4">Age</th><th className="p-4">Status / Time</th><th className="p-4">Scanned By</th><th className="p-4 text-right">ID</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-white/5">
@@ -724,7 +880,20 @@ function GuestListModule({ tickets, initialFilterStatus, initialFilterType, init
                             <td className="p-4 font-medium text-white">{t.name}</td>
                             <td className="p-4"><TypeBadge type={t.ticketType} /></td>
                             <td className="p-4">{t.phone}</td>
-                            <td className="p-4"><StatusBadge status={t.status} /></td>
+                            <td className="p-4">{t.gender || '-'}</td>
+                            <td className="p-4">{t.age || '-'}</td>
+                            <td className="p-4">
+                               <div className="flex flex-col">
+                                   <StatusBadge status={t.status} />
+                                   {t.status === 'arrived' && t.scannedAt && (
+                                       <span className="text-[10px] text-slate-500 mt-1 font-mono">
+                                           {new Date(t.scannedAt).toLocaleString([], {year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute:'2-digit'})}
+                                       </span>
+                                   )}
+                               </div>
+                            </td>
+                            <td className="p-4 text-xs font-mono text-slate-500">{t.scannedBy || '-'}</td>
+                            <td className="p-4 text-right font-mono text-xs opacity-50 select-all cursor-text">{t.id}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -733,7 +902,6 @@ function GuestListModule({ tickets, initialFilterStatus, initialFilterType, init
                  {filteredTickets.length === 0 && <div className="p-8 text-center text-slate-500 text-sm">No guests found</div>}
             </div>
 
-             {/* Modals are placed here (DeleteModal, ImportModal) as in original code */}
              <DeleteModal isOpen={isDeleteModalOpen} onClose={() => setIsDeleteModalOpen(false)} onConfirm={confirmDelete} count={selectedIds.size} type="guests"/>
              {isImportModalOpen && <ImportModal close={() => setIsImportModalOpen(false)} currentUser={currentUser} />}
         </div>
@@ -744,16 +912,36 @@ function GuestListModule({ tickets, initialFilterStatus, initialFilterType, init
 // SUB-MODULE: LOGS
 // ===========================================
 function LogsModule({ logs }) {
-    // ... (Identical logs module) ...
     const [filter, setFilter] = useState('all');
     const [search, setSearch] = useState('');
+    const [selectedIds, setSelectedIds] = useState(new Set());
+    const [isSelectionMode, setIsSelectionMode] = useState(false);
+    const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+
     const filteredLogs = useMemo(() => {
         return logs.filter(l => {
             if (filter !== 'all' && l.action !== filter) return false;
-            if (search && !l.details.toLowerCase().includes(search.toLowerCase())) return false;
+            if (search && !l.details.toLowerCase().includes(search.toLowerCase()) && !l.username.toLowerCase().includes(search.toLowerCase())) return false;
             return true;
         });
     }, [logs, filter, search]);
+
+    const handleDeleteClick = () => {
+        setIsDeleteModalOpen(true);
+    };
+
+    const confirmDelete = async () => {
+        const batch = writeBatch(db);
+        selectedIds.forEach(id => batch.delete(doc(db, 'activity_logs', id)));
+        await batch.commit();
+        setSelectedIds(new Set());
+        setIsSelectionMode(false);
+        setIsDeleteModalOpen(false);
+    };
+
+    const toggleSelect = (id) => { const n = new Set(selectedIds); if (n.has(id)) n.delete(id); else n.add(id); setSelectedIds(n); };
+    const toggleSelectionMode = () => { if (isSelectionMode) setSelectedIds(new Set()); setIsSelectionMode(!isSelectionMode); };
+    const toggleSelectAll = () => { if (selectedIds.size === filteredLogs.length) setSelectedIds(new Set()); else setSelectedIds(new Set(filteredLogs.map(l => l.id))); };
 
     return (
         <div className="space-y-4">
@@ -762,24 +950,35 @@ function LogsModule({ logs }) {
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
                     <input type="text" placeholder="Search logs..." value={search} onChange={e => setSearch(e.target.value)} className="w-full bg-slate-950 border border-white/10 rounded-xl py-2 pl-10 pr-4 text-sm focus:outline-none focus:border-blue-500 text-white" />
                 </div>
-                 <select value={filter} onChange={(e) => setFilter(e.target.value)} className="bg-slate-950 border border-white/10 rounded-xl text-sm px-4 py-2 text-slate-300 focus:outline-none flex-1 md:flex-initial md:w-48 h-[42px]">
-                    <option value="all">All Actions</option>
-                    <option value="LOGIN">Login</option>
-                    <option value="TICKET_CREATE">Ticket Create</option>
-                    <option value="SCAN_ENTRY">Scan Entry</option>
-                    <option value="CONFIG_CHANGE">Config Change</option>
-                    <option value="LOCK_ACTION">Locks</option>
-                </select>
+                 <div className="flex gap-2 items-center w-full md:w-auto">
+                    <select value={filter} onChange={(e) => setFilter(e.target.value)} className="bg-slate-950 border border-white/10 rounded-xl text-sm px-4 py-2 text-slate-300 focus:outline-none flex-1 md:flex-initial md:w-48 h-[42px]">
+                        <option value="all">All Actions</option>
+                        <option value="LOGIN">Login</option>
+                        <option value="TICKET_CREATE">Ticket Create</option>
+                        <option value="SCAN_ENTRY">Scan Entry</option>
+                        <option value="CONFIG_CHANGE">Config Change</option>
+                        <option value="LOCK_ACTION">Locks</option>
+                    </select>
+                    <button onClick={handleDeleteClick} disabled={selectedIds.size === 0} className={`p-2.5 rounded-xl border transition-all w-12 flex items-center justify-center h-[42px] ${selectedIds.size > 0 ? 'border-red-500/20 bg-red-500/10 text-red-400 cursor-pointer' : 'border-white/5 text-slate-600 opacity-50 cursor-not-allowed'}`}><Trash2 className="w-5 h-5" /></button>
+                    <button onClick={toggleSelectionMode} className={`p-2.5 rounded-xl border w-12 flex items-center justify-center h-[42px] ${isSelectionMode ? 'bg-blue-600 border-blue-600 text-white' : 'border-white/10 text-slate-400'}`}><CheckSquare className="w-5 h-5" /></button>
+                </div>
             </div>
+
+             <DeleteModal isOpen={isDeleteModalOpen} onClose={() => setIsDeleteModalOpen(false)} onConfirm={confirmDelete} count={selectedIds.size} type="logs"/>
+
              <div className="bg-slate-900/40 border border-white/5 rounded-2xl overflow-hidden">
                 <div className="overflow-x-auto">
                     <table className="w-full text-left text-sm text-slate-400 whitespace-nowrap">
                         <thead className="bg-white/5 text-slate-200 uppercase text-xs">
-                        <tr><th className="p-4">Time</th><th className="p-4">User</th><th className="p-4">Action</th><th className="p-4">Details</th></tr>
+                        <tr>
+                            {isSelectionMode && <th className="p-4 w-10"><button onClick={toggleSelectAll}>{selectedIds.size === filteredLogs.length && filteredLogs.length > 0 ? <CheckSquare className="w-4 h-4 text-blue-500"/> : <Square className="w-4 h-4"/>}</button></th>}
+                            <th className="p-4">Time</th><th className="p-4">User</th><th className="p-4">Action</th><th className="p-4">Details</th>
+                        </tr>
                         </thead>
                         <tbody className="divide-y divide-white/5">
                         {filteredLogs.map(log => (
-                            <tr key={log.id} className="hover:bg-white/5">
+                            <tr key={log.id} className={`hover:bg-white/5 ${selectedIds.has(log.id) ? 'bg-blue-500/5' : ''}`}>
+                            {isSelectionMode && <td className="p-4 text-center"><button onClick={() => toggleSelect(log.id)}>{selectedIds.has(log.id) ? <CheckSquare className="w-4 h-4 text-blue-500"/> : <Square className="w-4 h-4"/>}</button></td>}
                             <td className="p-4 whitespace-nowrap">{new Date(log.timestamp).toLocaleString()}</td>
                             <td className="p-4 text-blue-400">{log.username}</td>
                             <td className="p-4"><ActionBadge action={log.action} /></td>
@@ -842,7 +1041,10 @@ function SettingsModule({ settings, currentUser }) {
                    <span className="text-xs text-slate-500 uppercase">Event Name</span>
                    {isEditing ? <input type="text" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="bg-black/20 border border-white/10 rounded-lg p-2 text-white text-sm focus:border-blue-500 outline-none transition-colors"/> : <span className="text-slate-200 font-medium text-lg">{settings?.name || '--'}</span>}
                  </div>
-                 {/* ... other fields ... */}
+                 <div className="flex flex-col gap-1 pb-4 border-b border-white/5">
+                   <span className="text-xs text-slate-500 uppercase">Venue</span>
+                   {isEditing ? <input type="text" value={formData.place} onChange={e => setFormData({...formData, place: e.target.value})} className="bg-black/20 border border-white/10 rounded-lg p-2 text-white text-sm focus:border-blue-500 outline-none transition-colors"/> : <span className="text-slate-200 font-medium">{settings?.place || '--'}</span>}
+                 </div>
                  <div className="flex flex-col gap-1">
                    <span className="text-xs text-slate-500 uppercase">Deadline</span>
                    {isEditing ? <input type="datetime-local" value={formData.deadline} onChange={e => setFormData({...formData, deadline: e.target.value})} className="bg-black/20 border border-white/10 rounded-lg p-2 text-white text-sm focus:border-blue-500 outline-none invert-calendar-icon transition-colors"/> : <span className="text-slate-200 font-medium">{settings?.deadline ? new Date(settings.deadline).toLocaleString() : 'Not Set'}</span>}
