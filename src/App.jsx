@@ -10,7 +10,8 @@ import {
   UserCheck, Clock, Lock, LogOut, Menu, X, ChevronRight, Smartphone, LogIn,
   Filter, Download, Upload, Trash2, MoreVertical, CheckSquare, Square, Crown, 
   FileText, ChevronDown, X as CloseIcon, Terminal, Copy, Play, Save, Edit2, 
-  CheckCircle, AlertCircle, Eye, EyeOff, Unlock, User, Wifi, FileSpreadsheet
+  CheckCircle, AlertCircle, Eye, EyeOff, Unlock, User, Wifi, FileSpreadsheet,
+  AlertTriangle
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
@@ -898,7 +899,7 @@ function GuestListModule({ tickets, initialFilterStatus, initialFilterType, init
             </div>
 
              <DeleteModal isOpen={isDeleteModalOpen} onClose={() => setIsDeleteModalOpen(false)} onConfirm={confirmDelete} count={selectedIds.size} type="guests"/>
-             {isImportModalOpen && <ImportModal close={() => setIsImportModalOpen(false)} currentUser={currentUser} />}
+             {isImportModalOpen && <ImportModal close={() => setIsImportModalOpen(false)} currentUser={currentUser} existingTickets={tickets} />}
         </div>
     );
 }
@@ -1365,8 +1366,9 @@ function DeleteModal({ isOpen, onClose, onConfirm, count, type }) {
     );
 }
 
-function ImportModal({ close, currentUser }) {
+function ImportModal({ close, currentUser, existingTickets }) {
     const [previewData, setPreviewData] = useState(null);
+    const [duplicateCount, setDuplicateCount] = useState(0);
     const fileInputRef = useRef(null);
 
     const handleFile = async (e) => {
@@ -1376,15 +1378,33 @@ function ImportModal({ close, currentUser }) {
         const extension = file.name.split('.').pop().toLowerCase();
         
         reader.onload = async (evt) => {
-             let data = [];
+             let rawData = [];
              if (extension === 'json') {
-                 data = JSON.parse(evt.target.result);
+                 rawData = JSON.parse(evt.target.result);
              } else if (extension === 'csv') {
                  const wb = XLSX.read(evt.target.result, { type: 'binary' });
                  const ws = wb.Sheets[wb.SheetNames[0]];
-                 data = XLSX.utils.sheet_to_json(ws);
+                 rawData = XLSX.utils.sheet_to_json(ws);
              }
-             setPreviewData(data);
+
+             // DUPLICATE DETECTION LOGIC
+             // 1. Create a Set of existing phone numbers for O(1) lookup
+             const existingPhones = new Set(existingTickets.map(t => String(t.phone).trim()));
+             
+             // 2. Filter rawData
+             let dups = 0;
+             const uniqueData = rawData.filter(row => {
+                 const phone = String(row.phone || row.Phone || '').trim();
+                 // If phone exists in DB, it's a duplicate.
+                 if (phone && existingPhones.has(phone)) {
+                     dups++;
+                     return false; // Skip
+                 }
+                 return true; // Keep
+             });
+
+             setDuplicateCount(dups);
+             setPreviewData(uniqueData);
         };
 
         if (extension === 'json') {
@@ -1466,12 +1486,24 @@ function ImportModal({ close, currentUser }) {
                             </div>
                             <div>
                                 <p className="text-sm font-medium text-white">Ready to Import</p>
-                                <p className="text-xs text-slate-500">{previewData.length} records found</p>
+                                <p className="text-xs text-slate-500">{previewData.length} new records found</p>
                             </div>
                         </div>
+
+                        {duplicateCount > 0 && (
+                            <div className="bg-amber-500/10 p-4 rounded-xl border border-amber-500/20 flex items-center gap-4">
+                                <div className="w-10 h-10 rounded-full bg-amber-500/10 flex items-center justify-center border border-amber-500/20">
+                                    <AlertTriangle className="w-5 h-5 text-amber-500" />
+                                </div>
+                                <div>
+                                    <p className="text-sm font-medium text-amber-200">Duplicates Detected</p>
+                                    <p className="text-xs text-amber-500/80">{duplicateCount} records will be skipped</p>
+                                </div>
+                            </div>
+                        )}
                         
                         <div className="flex gap-3 mt-4">
-                            <button onClick={() => setPreviewData(null)} className="flex-1 py-2.5 rounded-xl border border-white/10 text-slate-400 text-sm hover:bg-white/5 transition-colors">Back</button>
+                            <button onClick={() => { setPreviewData(null); setDuplicateCount(0); }} className="flex-1 py-2.5 rounded-xl border border-white/10 text-slate-400 text-sm hover:bg-white/5 transition-colors">Back</button>
                             <button onClick={confirmImport} className="flex-1 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-medium hover:bg-blue-500 transition-all shadow-lg shadow-blue-900/20">Confirm Import</button>
                         </div>
                     </div>
