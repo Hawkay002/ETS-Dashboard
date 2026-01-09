@@ -8,7 +8,7 @@ import {
 import { 
   LayoutDashboard, Users, Logs, Settings, Search, Shield, Ticket, 
   UserCheck, Clock, Lock, LogOut, Menu, X, ChevronRight, Smartphone, LogIn,
-  Filter, Download, Upload, Trash2, MoreVertical, CheckSquare, Square, Crown, FileText, ChevronDown, X as CloseIcon, Terminal, Copy, Play, Save, Edit2, CheckCircle, AlertCircle, Eye, EyeOff
+  Filter, Download, Upload, Trash2, MoreVertical, CheckSquare, Square, Crown, FileText, ChevronDown, X as CloseIcon, Terminal, Copy, Play, Save, Edit2, CheckCircle, AlertCircle, Eye, EyeOff, Unlock, Monitor
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
@@ -137,6 +137,9 @@ function DashboardLayout({ user }) {
   const [tickets, setTickets] = useState([]);
   const [logs, setLogs] = useState([]);
   const [settings, setSettings] = useState(null);
+  const [staffData, setStaffData] = useState([]);
+  const [heartbeats, setHeartbeats] = useState({});
+  const [locks, setLocks] = useState({});
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   
   // SHARED FILTER STATES
@@ -146,16 +149,38 @@ function DashboardLayout({ user }) {
 
   // Data Fetching
   useEffect(() => {
+    // 1. Tickets
     const unsubTickets = onSnapshot(query(collection(db, APP_COLLECTION_ROOT, SHARED_DATA_ID, 'tickets')), 
       (snap) => setTickets(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
 
+    // 2. Logs
     const unsubLogs = onSnapshot(query(collection(db, 'activity_logs'), orderBy('timestamp', 'desc')), 
       (snap) => setLogs(snap.docs.map(d => ({ id: d.id, ...d.data() })))); 
 
+    // 3. Settings
     const unsubSettings = onSnapshot(doc(db, APP_COLLECTION_ROOT, SHARED_DATA_ID, 'settings', 'config'), 
       (doc) => doc.exists() && setSettings(doc.data()));
 
-    return () => { unsubTickets(); unsubLogs(); unsubSettings(); };
+    // 4. Staff (Allowed Usernames)
+    const unsubStaff = onSnapshot(collection(db, 'allowed_usernames'), (snap) => {
+        setStaffData(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    });
+
+    // 5. Heartbeats (For Online Status)
+    const unsubHeartbeats = onSnapshot(collection(db, 'status_heartbeats'), (snap) => {
+        const hb = {};
+        snap.forEach(d => hb[d.id] = d.data());
+        setHeartbeats(hb);
+    });
+
+    // 6. Locks (For Locked Status)
+    const unsubLocks = onSnapshot(collection(db, 'global_locks'), (snap) => {
+        const l = {};
+        snap.forEach(d => l[d.id] = d.data());
+        setLocks(l);
+    });
+
+    return () => { unsubTickets(); unsubLogs(); unsubSettings(); unsubStaff(); unsubHeartbeats(); unsubLocks(); };
   }, []);
 
   const stats = useMemo(() => ({
@@ -281,6 +306,9 @@ function DashboardLayout({ user }) {
                   </div>
                 </div>
 
+                {/* --- STAFF STATUS CARD (NEW) --- */}
+                <StaffStatusCard staff={staffData} heartbeats={heartbeats} locks={locks} onViewAll={() => setActiveTab('settings')} />
+
                 <div className="bg-slate-900/40 border border-white/5 rounded-2xl p-5 shadow-sm flex flex-col">
                   <div className="flex justify-between items-center mb-4">
                     <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Activity Feed</h3>
@@ -326,9 +354,15 @@ function DashboardLayout({ user }) {
              <ConsoleModule currentUser={user} />
           )}
 
-          {/* TAB: SETTINGS */}
+          {/* TAB: SETTINGS (ADMIN CONTROL PANEL) */}
           {activeTab === 'settings' && (
-             <SettingsModule settings={settings} currentUser={user} />
+             <SettingsModule 
+                settings={settings} 
+                currentUser={user} 
+                staffData={staffData} 
+                heartbeats={heartbeats} 
+                locks={locks} 
+             />
           )}
 
         </div>
@@ -344,6 +378,66 @@ function DashboardLayout({ user }) {
       </nav>
     </div>
   );
+}
+
+// ===========================================
+// SUB-MODULE: STAFF STATUS CARD (NEW)
+// ===========================================
+function StaffStatusCard({ staff, heartbeats, locks, onViewAll }) {
+    // Group staff by Role
+    const roles = {
+        'Event Manager': [],
+        'Registration Desk': [],
+        'Security Head': []
+    };
+
+    staff.forEach(s => {
+        if (roles[s.role]) roles[s.role].push(s);
+    });
+
+    const isOnline = (id) => {
+        const lastSeen = heartbeats[id]?.lastSeen;
+        return lastSeen && (Date.now() - lastSeen < 120000); // 2 minutes
+    };
+
+    const isLocked = (id) => {
+        return locks[id]?.lockedTabs?.length > 0;
+    };
+
+    return (
+        <div className="bg-slate-900/40 border border-white/5 rounded-2xl p-5 shadow-sm flex flex-col h-full">
+            <div className="flex justify-between items-center mb-4">
+                <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Staff Status</h3>
+                <button onClick={onViewAll} className="text-xs text-blue-400">View All</button>
+            </div>
+            
+            <div className="flex-1 space-y-4 overflow-y-auto max-h-60 pr-2">
+                {Object.entries(roles).map(([role, members]) => (
+                    <div key={role} className="space-y-2">
+                        <div className="text-[10px] font-bold text-slate-600 uppercase tracking-wider bg-white/5 px-2 py-1 rounded inline-block">{role}</div>
+                        {members.length === 0 ? <div className="text-xs text-slate-700 italic px-2">No staff assigned</div> : (
+                            <div className="grid grid-cols-1 gap-2">
+                                {members.map(member => (
+                                    <div key={member.id} className="flex items-center justify-between bg-black/20 p-2 rounded-lg border border-white/5">
+                                        <div className="flex items-center gap-2">
+                                            <div className={`w-2 h-2 rounded-full ${isOnline(member.id) ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 'bg-slate-700'}`}></div>
+                                            <span className="text-xs text-slate-300 font-medium">{member.realName || member.name}</span>
+                                        </div>
+                                        {isLocked(member.id) && (
+                                            <div className="flex items-center gap-1 text-[10px] text-red-400 bg-red-500/10 px-1.5 py-0.5 rounded border border-red-500/20">
+                                                <Lock className="w-3 h-3" />
+                                                <span>Locked</span>
+                                            </div>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
 }
 
 // ===========================================
@@ -414,7 +508,6 @@ function ConsoleModule({ currentUser }) {
 
     return (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 h-[calc(100vh-140px)] grid-rows-[auto_1fr] lg:grid-rows-1">
-            {/* Input Form */}
             <div className="bg-slate-900/40 border border-white/5 rounded-2xl p-6 h-fit">
                 <h2 className="text-lg font-medium text-white mb-4 flex items-center gap-2">
                     <Users className="w-5 h-5 text-blue-400" />
@@ -464,15 +557,12 @@ function ConsoleModule({ currentUser }) {
                 </div>
             </div>
 
-            {/* Terminal Output */}
             <div className="lg:col-span-2 bg-black border border-white/10 rounded-2xl flex flex-col overflow-hidden shadow-2xl font-mono text-sm relative">
-                {/* Terminal Header */}
                 <div className="bg-slate-900/80 border-b border-white/10 px-4 py-2 flex items-center gap-2">
                     <Terminal className="w-4 h-4 text-emerald-500" />
                     <span className="text-slate-400 text-xs">admin@dashboard:~/console</span>
                 </div>
 
-                {/* Terminal Body */}
                 <div className="flex-1 p-4 overflow-y-auto space-y-1 text-slate-300">
                     {terminalLines.map((line, idx) => (
                         <div key={idx} className={`${line.type === 'error' ? 'text-red-400' : line.type === 'success' ? 'text-emerald-400' : line.type === 'input' ? 'text-white font-bold' : 'text-slate-500'}`}>
@@ -482,7 +572,6 @@ function ConsoleModule({ currentUser }) {
                     <div ref={bottomRef} />
                 </div>
 
-                {/* Active Input Line */}
                 <div className="bg-slate-900/50 p-4 border-t border-white/10 flex items-center gap-3">
                     <span className="text-emerald-500 font-bold">{">"}</span>
                     <input 
@@ -1044,16 +1133,13 @@ function LogsModule({ logs }) {
 }
 
 // ===========================================
-// SUB-MODULE: SETTINGS & ADMIN
+// SUB-MODULE: SETTINGS & ADMIN (UPDATED)
 // ===========================================
-function SettingsModule({ settings, currentUser }) {
+function SettingsModule({ settings, currentUser, staffData, heartbeats, locks }) {
     const isAdmin = currentUser.email === ADMIN_EMAIL;
-    const [users, setUsers] = useState([]);
-    
-    // Edit State
     const [isEditing, setIsEditing] = useState(false);
     const [formData, setFormData] = useState({ name: '', place: '', deadline: '' });
-    const [notification, setNotification] = useState(null); // For Success/Error Toast
+    const [notification, setNotification] = useState(null); 
 
     useEffect(() => {
         if(settings) {
@@ -1069,8 +1155,8 @@ function SettingsModule({ settings, currentUser }) {
         if (!isAdmin) return;
         const fetchUsers = async () => {
              const managedEmails = ['eveman.test@gmail.com', 'regdesk.test@gmail.com', 'sechead.test@gmail.com'];
-             const data = managedEmails.map(email => ({ email, role: email.split('.')[0] }));
-             setUsers(data);
+             // const data = managedEmails.map(email => ({ email, role: email.split('.')[0] })); // Removed, using staffData now
+             // setUsers(data);
         };
         fetchUsers();
     }, [isAdmin]);
@@ -1083,7 +1169,6 @@ function SettingsModule({ settings, currentUser }) {
                 deadline: new Date(formData.deadline).getTime()
             }, { merge: true });
             
-            // Add Log
             await  setDoc(doc(collection(db, 'activity_logs')), {
                 action: 'CONFIG_CHANGE',
                 details: `Updated Event Config: ${formData.name}`,
@@ -1092,14 +1177,9 @@ function SettingsModule({ settings, currentUser }) {
             });
 
             setIsEditing(false);
-            
-            // Show Success Toast
             setNotification({ type: 'success', message: 'Configuration updated successfully.' });
             setTimeout(() => setNotification(null), 3000);
-
         } catch (e) {
-            console.error(e);
-            // Show Error Toast
             setNotification({ type: 'error', message: 'Failed to update configuration.' });
             setTimeout(() => setNotification(null), 3000);
         }
@@ -1107,7 +1187,6 @@ function SettingsModule({ settings, currentUser }) {
 
     const handleCancel = () => {
         setIsEditing(false);
-        // Reset form to original values
         if(settings) {
             setFormData({
                 name: settings.name || '',
@@ -1119,8 +1198,6 @@ function SettingsModule({ settings, currentUser }) {
 
     return (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 relative">
-            
-            {/* Toast Notification */}
             {notification && (
                 <div className={`absolute bottom-4 right-4 z-50 flex items-center gap-3 px-4 py-3 rounded-xl border shadow-2xl animate-in slide-in-from-bottom-5 ${notification.type === 'success' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-red-500/10 border-red-500/20 text-red-400'}`}>
                     {notification.type === 'success' ? <CheckCircle className="w-5 h-5" /> : <AlertCircle className="w-5 h-5" />}
@@ -1128,23 +1205,15 @@ function SettingsModule({ settings, currentUser }) {
                 </div>
             )}
 
-            <div className="bg-slate-900/40 border border-white/5 rounded-2xl p-6">
+            {/* Config Card */}
+            <div className="bg-slate-900/40 border border-white/5 rounded-2xl p-6 h-fit">
                <div className="flex justify-between items-center mb-6">
                    <h2 className="text-lg font-medium text-white flex items-center gap-2"><Settings className="w-5 h-5"/> Configuration</h2>
-                   
                    <div className="flex gap-2">
                        {isEditing && (
-                           <button 
-                                onClick={handleCancel}
-                                className="px-3 py-1.5 rounded-lg text-xs font-medium bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20 transition-all"
-                           >
-                               Cancel
-                           </button>
+                           <button onClick={handleCancel} className="px-3 py-1.5 rounded-lg text-xs font-medium bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20 transition-all">Cancel</button>
                        )}
-                       <button 
-                            onClick={() => isEditing ? handleSaveConfig() : setIsEditing(true)}
-                            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${isEditing ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20' : 'bg-white/5 text-slate-400 hover:text-white border border-white/10'}`}
-                       >
+                       <button onClick={() => isEditing ? handleSaveConfig() : setIsEditing(true)} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${isEditing ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20' : 'bg-white/5 text-slate-400 hover:text-white border border-white/10'}`}>
                            {isEditing ? <><Save className="w-3 h-3"/> Save Changes</> : <><Edit2 className="w-3 h-3"/> Edit</>}
                        </button>
                    </div>
@@ -1153,33 +1222,21 @@ function SettingsModule({ settings, currentUser }) {
                <div className="space-y-6">
                  <div className="flex flex-col gap-1 pb-4 border-b border-white/5">
                    <span className="text-xs text-slate-500 uppercase">Event Name</span>
-                   {isEditing ? (
-                       <input type="text" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="bg-black/20 border border-white/10 rounded-lg p-2 text-white text-sm focus:border-blue-500 outline-none transition-colors"/>
-                   ) : (
-                       <span className="text-slate-200 font-medium text-lg">{settings?.name || '--'}</span>
-                   )}
+                   {isEditing ? ( <input type="text" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="bg-black/20 border border-white/10 rounded-lg p-2 text-white text-sm focus:border-blue-500 outline-none transition-colors"/> ) : ( <span className="text-slate-200 font-medium text-lg">{settings?.name || '--'}</span> )}
                  </div>
                  <div className="flex flex-col gap-1 pb-4 border-b border-white/5">
                    <span className="text-xs text-slate-500 uppercase">Venue</span>
-                   {isEditing ? (
-                       <input type="text" value={formData.place} onChange={e => setFormData({...formData, place: e.target.value})} className="bg-black/20 border border-white/10 rounded-lg p-2 text-white text-sm focus:border-blue-500 outline-none transition-colors"/>
-                   ) : (
-                       <span className="text-slate-200 font-medium">{settings?.place || '--'}</span>
-                   )}
+                   {isEditing ? ( <input type="text" value={formData.place} onChange={e => setFormData({...formData, place: e.target.value})} className="bg-black/20 border border-white/10 rounded-lg p-2 text-white text-sm focus:border-blue-500 outline-none transition-colors"/> ) : ( <span className="text-slate-200 font-medium">{settings?.place || '--'}</span> )}
                  </div>
                  <div className="flex flex-col gap-1">
                    <span className="text-xs text-slate-500 uppercase">Deadline</span>
-                   {isEditing ? (
-                       <input type="datetime-local" value={formData.deadline} onChange={e => setFormData({...formData, deadline: e.target.value})} className="bg-black/20 border border-white/10 rounded-lg p-2 text-white text-sm focus:border-blue-500 outline-none invert-calendar-icon transition-colors"/>
-                   ) : (
-                       <span className="text-slate-200 font-medium">{settings?.deadline ? new Date(settings.deadline).toLocaleString() : 'Not Set'}</span>
-                   )}
+                   {isEditing ? ( <input type="datetime-local" value={formData.deadline} onChange={e => setFormData({...formData, deadline: e.target.value})} className="bg-black/20 border border-white/10 rounded-lg p-2 text-white text-sm focus:border-blue-500 outline-none invert-calendar-icon transition-colors"/> ) : ( <span className="text-slate-200 font-medium">{settings?.deadline ? new Date(settings.deadline).toLocaleString() : 'Not Set'}</span> )}
                  </div>
                </div>
             </div>
 
             {isAdmin ? (
-                 <AdminControlPanel users={users} />
+                 <AdminControlPanel staffData={staffData} heartbeats={heartbeats} locks={locks} settings={settings} />
             ) : (
                 <div className="bg-slate-900/40 border border-white/5 rounded-2xl p-6 flex flex-col justify-center items-center text-center">
                     <Shield className="w-12 h-12 text-slate-600 mb-4" />
@@ -1191,69 +1248,282 @@ function SettingsModule({ settings, currentUser }) {
     );
 }
 
-function AdminControlPanel({ users }) {
-    const [selectedUser, setSelectedUser] = useState(null);
-    const [locks, setLocks] = useState({ create: false, booked: false, scanner: false });
+// ===========================================
+// ADMIN CONTROL PANEL (REBUILT)
+// ===========================================
+function AdminControlPanel({ staffData, heartbeats, locks, settings }) {
+    const [activeRole, setActiveRole] = useState('Event Manager');
+    const [selectedStaff, setSelectedStaff] = useState(new Set());
+    const [isLockModalOpen, setIsLockModalOpen] = useState(false);
+    const [isUnlockMode, setIsUnlockMode] = useState(false);
 
-    const handleSelectUser = async (email) => {
-        setSelectedUser(email);
-        try {
-            // Mock fetch - in production read real doc
-            setLocks({ create: false, booked: false, scanner: false }); 
-        } catch(e) {}
+    // Filter staff by active role
+    const filteredStaff = useMemo(() => {
+        return staffData.filter(s => s.role === activeRole);
+    }, [staffData, activeRole]);
+
+    // Check if user is online
+    const isOnline = (id) => {
+        const lastSeen = heartbeats[id]?.lastSeen;
+        return lastSeen && (Date.now() - lastSeen < 120000); 
     };
 
-    const handleSync = async () => {
-        if (!selectedUser) return;
-        const lockedTabs = Object.keys(locks).filter(k => locks[k]);
-        
-        try {
-            const lockRef = doc(db, 'global_locks', selectedUser);
-            await setDoc(lockRef, {
-                lockedTabs: lockedTabs,
-                updatedAt: Date.now(),
-                admin: ADMIN_EMAIL
-            }, { merge: true });
-            
-            alert(`Synced locks for ${selectedUser}`);
-        } catch(e) {
-            alert("Error syncing locks");
+    // Check if user is locked
+    const isLocked = (id) => locks[id]?.lockedTabs?.length > 0;
+
+    const toggleSelect = (id) => {
+        const newSet = new Set(selectedStaff);
+        if (newSet.has(id)) newSet.delete(id); else newSet.add(id);
+        setSelectedStaff(newSet);
+    };
+
+    const toggleSelectAll = () => {
+        if (selectedStaff.size === filteredStaff.length) setSelectedStaff(new Set()); 
+        else setSelectedStaff(new Set(filteredStaff.map(s => s.id)));
+    };
+
+    // Determine if we are in "Unlock" mode (all selected are locked)
+    useEffect(() => {
+        if (selectedStaff.size === 0) {
+            setIsUnlockMode(false);
+            return;
         }
+        const allLocked = Array.from(selectedStaff).every(id => isLocked(id));
+        setIsUnlockMode(allLocked);
+    }, [selectedStaff, locks]);
+
+    const handleProcess = () => {
+        setIsLockModalOpen(true);
+    };
+
+    const handleConfirmLock = async (payload) => {
+        const batch = writeBatch(db);
+        selectedStaff.forEach(username => {
+            const ref = doc(db, 'global_locks', username);
+            if (isUnlockMode) {
+                batch.delete(ref); // Unlock deletes the doc
+            } else {
+                batch.set(ref, {
+                    ...payload,
+                    lockedAt: Date.now(),
+                    admin: ADMIN_EMAIL
+                }, { merge: true });
+            }
+        });
+        await batch.commit();
+        setIsLockModalOpen(false);
+        setSelectedStaff(new Set());
     };
 
     return (
-        <div className="bg-slate-900/40 border border-white/5 rounded-2xl p-6 border-t-4 border-t-red-500/50">
-           <h2 className="text-lg font-medium text-white mb-2 flex items-center gap-2"><Shield className="w-5 h-5 text-red-500"/> Admin Control Panel</h2>
-           <p className="text-xs text-slate-500 mb-6">Remote Device Management & Locking</p>
+        <div className="bg-slate-900/40 border border-white/5 rounded-2xl p-0 overflow-hidden flex flex-col h-[500px]">
+            {/* Header */}
+            <div className="p-6 border-b border-white/5 flex justify-between items-center bg-slate-900/50">
+                <div>
+                    <h2 className="text-lg font-medium text-white flex items-center gap-2">
+                        <Shield className="w-5 h-5 text-red-500"/> Admin Control Panel
+                    </h2>
+                    <p className="text-xs text-slate-500 mt-1">Remote Device Management</p>
+                </div>
+                
+                <div className="flex gap-2">
+                    {/* Select All Button */}
+                    <button 
+                        onClick={toggleSelectAll} 
+                        className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-medium bg-white/5 text-slate-400 hover:text-white transition-all"
+                    >
+                       <CheckSquare className="w-4 h-4" /> {selectedStaff.size === filteredStaff.length && filteredStaff.length > 0 ? "Deselect All" : "Select All"}
+                    </button>
 
-           <div className="space-y-4">
-               <div className="flex gap-2 overflow-x-auto pb-2">
-                   {users.map(u => (
-                       <button key={u.email} onClick={() => handleSelectUser(u.email)}
-                         className={`px-4 py-3 rounded-xl border text-left min-w-[140px] transition-all ${selectedUser === u.email ? 'bg-blue-600 border-blue-500 text-white' : 'bg-black/20 border-white/10 text-slate-400'}`}>
-                           <div className="text-xs font-bold uppercase">{u.role}</div>
-                           <div className="text-[10px] truncate opacity-70">{u.email}</div>
-                       </button>
-                   ))}
-               </div>
+                    {selectedStaff.size > 0 && (
+                        <button 
+                            onClick={handleProcess}
+                            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold shadow-lg transition-all ${isUnlockMode ? 'bg-emerald-500 text-white shadow-emerald-500/20' : 'bg-red-500 text-white shadow-red-500/20'}`}
+                        >
+                            {isUnlockMode ? <Unlock className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
+                            {isUnlockMode ? 'Unlock Devices' : 'Lock Devices'}
+                        </button>
+                    )}
+                </div>
+            </div>
 
-               {selectedUser && (
-                   <div className="bg-black/20 rounded-xl p-4 animate-in fade-in slide-in-from-top-4">
-                       <p className="text-xs text-slate-500 uppercase mb-3">Lock Tabs for <span className="text-blue-400">{selectedUser}</span></p>
-                       <div className="flex gap-4 mb-4">
-                           {['create', 'booked', 'scanner'].map(tab => (
-                               <label key={tab} className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer">
-                                   <input type="checkbox" checked={locks[tab]} onChange={e => setLocks({...locks, [tab]: e.target.checked})} className="rounded bg-slate-800 border-white/20 text-blue-600" />
-                                   <span className="capitalize">{tab}</span>
-                               </label>
-                           ))}
-                       </div>
-                       <button onClick={handleSync} className="w-full bg-red-500/10 border border-red-500/20 text-red-400 py-2 rounded-lg text-sm font-medium hover:bg-red-500/20 transition-colors">
-                           Sync & Lock Device
-                       </button>
-                   </div>
-               )}
-           </div>
+            {/* Role Nav */}
+            <div className="flex border-b border-white/5 bg-black/20">
+                {['Event Manager', 'Registration Desk', 'Security Head'].map(role => (
+                    <button 
+                        key={role}
+                        onClick={() => { setActiveRole(role); setSelectedStaff(new Set()); }}
+                        className={`flex-1 py-3 text-xs font-bold uppercase tracking-wider transition-colors ${activeRole === role ? 'text-blue-400 border-b-2 border-blue-500 bg-blue-500/5' : 'text-slate-500 hover:text-slate-300 hover:bg-white/5'}`}
+                    >
+                        {role}
+                    </button>
+                ))}
+            </div>
+
+            {/* Staff List */}
+            <div className="flex-1 overflow-y-auto p-2">
+                {filteredStaff.length === 0 ? (
+                    <div className="h-full flex items-center justify-center text-slate-600 text-sm">No staff found for this role.</div>
+                ) : (
+                    <div className="space-y-1">
+                        {filteredStaff.map(staff => {
+                            const online = isOnline(staff.id);
+                            const locked = isLocked(staff.id);
+                            const selected = selectedStaff.has(staff.id);
+
+                            return (
+                                <div 
+                                    key={staff.id} 
+                                    onClick={() => toggleSelect(staff.id)}
+                                    className={`flex items-center gap-4 p-3 rounded-xl border cursor-pointer transition-all ${selected ? 'bg-blue-600/10 border-blue-500/50' : 'bg-white/5 border-transparent hover:bg-white/10'}`}
+                                >
+                                    <div className={`w-5 h-5 rounded flex items-center justify-center border ${selected ? 'bg-blue-500 border-blue-500' : 'border-slate-600'}`}>
+                                        {selected && <CheckSquare className="w-3.5 h-3.5 text-white" />}
+                                    </div>
+                                    
+                                    <div className="flex-1">
+                                        <div className="flex items-center gap-2">
+                                            <span className={`text-sm font-medium ${selected ? 'text-white' : 'text-slate-300'}`}>{staff.realName || staff.name}</span>
+                                            {locked && <Lock className="w-3 h-3 text-red-500" />}
+                                        </div>
+                                        <div className="text-[10px] text-slate-500 font-mono">{staff.id}</div>
+                                    </div>
+
+                                    <div className="flex items-center gap-2">
+                                        <div className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase border ${online ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' : 'bg-slate-800 text-slate-500 border-slate-700'}`}>
+                                            {online ? 'Online' : 'Offline'}
+                                        </div>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                )}
+            </div>
+
+            {/* Secure Modal */}
+            <SecureLockModal 
+                isOpen={isLockModalOpen} 
+                isUnlock={isUnlockMode}
+                onClose={() => setIsLockModalOpen(false)}
+                onConfirm={handleConfirmLock}
+                adminPassword={settings?.admin_password || "admin123"} // Fallback if not in DB
+                count={selectedStaff.size}
+            />
+        </div>
+    );
+}
+
+// ===========================================
+// SUB-COMPONENT: SECURE LOCK MODAL
+// ===========================================
+function SecureLockModal({ isOpen, isUnlock, onClose, onConfirm, adminPassword, count }) {
+    const [step, setStep] = useState(1); // 1: Config, 2: Password
+    const [reason, setReason] = useState('');
+    const [tabs, setTabs] = useState({ create: false, booked: false, scanner: false });
+    const [passwordInput, setPasswordInput] = useState('');
+    const [error, setError] = useState('');
+
+    useEffect(() => {
+        if(isOpen) {
+            setStep(isUnlock ? 2 : 1); // Skip config if unlocking
+            setReason('');
+            setTabs({ create: false, booked: false, scanner: false });
+            setPasswordInput('');
+            setError('');
+        }
+    }, [isOpen, isUnlock]);
+
+    const handleNext = () => {
+        if (!isUnlock) {
+            if (!reason) return setError("Reason is required to lock devices.");
+            if (!tabs.create && !tabs.booked && !tabs.scanner) return setError("Select at least one tab to lock.");
+        }
+        setStep(2);
+        setError('');
+    };
+
+    const handleSubmit = () => {
+        if (passwordInput !== adminPassword) {
+            setError("Incorrect Administrator Password");
+            return;
+        }
+        
+        // Success
+        onConfirm({
+            lockedTabs: Object.keys(tabs).filter(k => tabs[k]),
+            reason: reason
+        });
+    };
+
+    if (!isOpen) return null;
+
+    return (
+        <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-50 p-4 backdrop-blur-md animate-in fade-in">
+            <div className="bg-slate-900 border border-white/10 rounded-2xl p-6 w-full max-w-sm shadow-2xl relative">
+                <button onClick={onClose} className="absolute top-4 right-4 text-slate-500 hover:text-white"><CloseIcon className="w-5 h-5" /></button>
+                
+                <div className="text-center mb-6">
+                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mx-auto mb-3 border ${isUnlock ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-red-500/10 border-red-500/20'}`}>
+                        {isUnlock ? <Unlock className="w-6 h-6 text-emerald-500" /> : <Lock className="w-6 h-6 text-red-500" />}
+                    </div>
+                    <h3 className="text-lg font-medium text-white">{isUnlock ? 'Unlock Devices' : 'Secure Lock'}</h3>
+                    <p className="text-sm text-slate-500">Managing access for <span className="text-white font-bold">{count}</span> users</p>
+                </div>
+
+                {step === 1 && !isUnlock && (
+                    <div className="space-y-4">
+                        <div className="space-y-2">
+                            <label className="text-xs uppercase text-slate-500 font-semibold">Tabs to Lock</label>
+                            <div className="grid grid-cols-3 gap-2">
+                                {['create', 'booked', 'scanner'].map(t => (
+                                    <button 
+                                        key={t}
+                                        onClick={() => setTabs({...tabs, [t]: !tabs[t]})}
+                                        className={`py-2 rounded-lg text-xs font-bold uppercase border transition-all ${tabs[t] ? 'bg-red-500 border-red-500 text-white' : 'bg-white/5 border-white/10 text-slate-400'}`}
+                                    >
+                                        {t}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                        <div className="space-y-1">
+                            <label className="text-xs uppercase text-slate-500 font-semibold">Reason</label>
+                            <textarea 
+                                value={reason}
+                                onChange={e => setReason(e.target.value)}
+                                className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-sm text-white focus:outline-none focus:border-red-500 h-20 resize-none"
+                                placeholder="e.g. Shift ended, Security breach..."
+                            />
+                        </div>
+                        {error && <p className="text-red-400 text-xs text-center">{error}</p>}
+                        <button onClick={handleNext} className="w-full py-3 rounded-xl bg-blue-600 text-white font-bold hover:bg-blue-500 transition-colors">Continue</button>
+                    </div>
+                )}
+
+                {step === 2 && (
+                    <div className="space-y-4">
+                        <div className="bg-white/5 p-4 rounded-xl text-center border border-white/5">
+                            <p className="text-xs text-slate-400 mb-2">Administrator Password Required</p>
+                            <input 
+                                type="password" 
+                                autoFocus
+                                value={passwordInput}
+                                onChange={e => setPasswordInput(e.target.value)}
+                                className="w-full bg-black/50 border border-white/10 rounded-lg p-2 text-center text-white focus:border-blue-500 outline-none tracking-widest"
+                                placeholder="••••••"
+                            />
+                        </div>
+                        {error && <p className="text-red-400 text-xs text-center">{error}</p>}
+                        <button 
+                            onClick={handleSubmit} 
+                            className={`w-full py-3 rounded-xl font-bold text-white transition-colors shadow-lg ${isUnlock ? 'bg-emerald-500 hover:bg-emerald-400 shadow-emerald-900/20' : 'bg-red-500 hover:bg-red-400 shadow-red-900/20'}`}
+                        >
+                            {isUnlock ? 'Authorize Unlock' : 'Confirm Lock'}
+                        </button>
+                    </div>
+                )}
+            </div>
         </div>
     );
 }
