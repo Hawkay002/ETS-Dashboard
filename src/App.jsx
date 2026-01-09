@@ -1405,7 +1405,7 @@ function ImportModal({ close, currentUser }) {
             <div className="bg-slate-900 border border-white/10 rounded-2xl p-6 w-full max-w-md">
                 <h3 className="text-lg font-medium text-white mb-4">Import Guests</h3>
                 <div className="border-2 border-dashed border-white/10 rounded-xl p-8 text-center mb-4">
-                    <input type="file" accept=".csv, .json" onChange={handleFile} className="hidden" id="fileImport" />
+                    <input type="file" accept=".csv,text/csv,application/vnd.ms-excel,.json,application/json" onChange={handleFile} className="hidden" id="fileImport" />
                     <label htmlFor="fileImport" className="cursor-pointer flex flex-col items-center gap-2">
                         <Upload className="w-8 h-8 text-slate-500" />
                         <span className="text-sm text-slate-400">Click to upload CSV or JSON</span>
