@@ -1427,7 +1427,8 @@ function ImportModal({ close, currentUser }) {
                 age: row.age || '',
                 gender: row.gender || '',
                 scanned: isScanned,
-                scannedAt: scannedTime
+                scannedAt: scannedTime,
+                scannedBy: row.scannedBy || ''
             });
         });
         await batch.commit();
