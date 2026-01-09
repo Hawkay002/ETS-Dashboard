@@ -1388,19 +1388,31 @@ function ImportModal({ close, currentUser, existingTickets }) {
              }
 
              // DUPLICATE DETECTION LOGIC
-             // 1. Create a Set of existing phone numbers for O(1) lookup
-             const existingPhones = new Set(existingTickets.map(t => String(t.phone).trim()));
+             // 1. Create Lookup Sets for O(1) checking
+             // We normalize phones by converting to string, trimming, and lowercasing to match loosely
+             const existingPhones = new Set(existingTickets.map(t => String(t.phone || '').trim().toLowerCase()));
+             const existingIds = new Set(existingTickets.map(t => t.id));
              
-             // 2. Filter rawData
              let dups = 0;
              const uniqueData = rawData.filter(row => {
-                 const phone = String(row.phone || row.Phone || '').trim();
-                 // If phone exists in DB, it's a duplicate.
-                 if (phone && existingPhones.has(phone)) {
+                 // Check ID match (if importing a backup with IDs)
+                 if (row.id && existingIds.has(row.id)) {
                      dups++;
-                     return false; // Skip
+                     return false;
                  }
-                 return true; // Keep
+
+                 // Check Phone match
+                 // Handle various CSV headers: phone, Phone, contact, Contact, mobile, Mobile
+                 let phoneVal = row.phone || row.Phone || row.contact || row.Contact || row.mobile || row.Mobile || '';
+                 phoneVal = String(phoneVal).trim().toLowerCase();
+
+                 // If phone is present and matches an existing one, skip
+                 if (phoneVal && existingPhones.has(phoneVal)) {
+                     dups++;
+                     return false;
+                 }
+                 
+                 return true; // Keep unique
              });
 
              setDuplicateCount(dups);
@@ -1429,11 +1441,10 @@ function ImportModal({ close, currentUser, existingTickets }) {
             let scannedTime = null;
             if (isScanned) {
                 if (row.scannedAt) {
-                    // Try to parse if string
                     const parsed = new Date(row.scannedAt).getTime();
                     scannedTime = isNaN(parsed) ? Date.now() : parsed;
                 } else {
-                    scannedTime = Date.now(); // Default if status is arrived but no time provided
+                    scannedTime = Date.now(); 
                 }
             }
 
