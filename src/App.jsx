@@ -290,7 +290,7 @@ function DashboardLayout({ user }) {
                 </div>
 
                 <div className="flex flex-col gap-4">
-                    {/* STAFF STATUS CARD - NEW FEATURE */}
+                    {/* STAFF STATUS CARD */}
                     <StaffStatusCard onViewAll={() => setActiveTab('settings')} />
 
                     <div className="bg-slate-900/40 border border-white/5 rounded-2xl p-5 shadow-sm flex flex-col flex-1">
@@ -375,16 +375,10 @@ function StaffStatusCard({ onViewAll }) {
         });
 
         // 2. Fetch Presence: We need listeners for each managed user email
-        // Note: In React we should manage subscriptions carefully.
         const presenceUnsubs = MANAGED_USERS.map(user => {
             return onSnapshot(collection(db, 'global_presence', user.email, 'devices'), (snap) => {
-                 // Collect devices from this role email
                  const devices = snap.docs.map(d => ({...d.data(), parentEmail: user.email}));
-                 // We update a central state. To avoid race conditions in simple state, we can use a functional update 
-                 // but simpler here: we just update a local cache and set state.
-                 // For robust dashboard, we'll just store all raw device data
                  setPresenceData(prev => {
-                     // Filter out old entries for this email to avoid duplicates
                      const others = prev.filter(d => d.parentEmail !== user.email);
                      return [...others, ...devices];
                  });
@@ -405,7 +399,6 @@ function StaffStatusCard({ onViewAll }) {
         };
     }, []);
 
-    // Helper to group staff
     const groupedStaff = useMemo(() => {
         const groups = {
             'Event Manager': [],
@@ -415,11 +408,9 @@ function StaffStatusCard({ onViewAll }) {
         
         staff.forEach(s => {
             if (groups[s.role]) {
-                // Determine Lock Status from Global Locks
                 let isLocked = false;
                 let lockReason = '';
                 
-                // Locks are stored under the Role Email (s.email) -> userSpecificLocks -> username
                 if (locks[s.email] && locks[s.email].userSpecificLocks && locks[s.email].userSpecificLocks[s.username]) {
                     const specificLocks = locks[s.email].userSpecificLocks[s.username];
                     if (specificLocks && specificLocks.length > 0) {
@@ -430,10 +421,8 @@ function StaffStatusCard({ onViewAll }) {
                     }
                 }
                 
-                // Determine Online Status
-                // Check if any device in presenceData matches this username and is recent
                 const now = Date.now();
-                const isOnline = presenceData.some(d => d.username === s.username && (now - d.lastSeen < 30000)); // 30s threshold
+                const isOnline = presenceData.some(d => d.username === s.username && (now - d.lastSeen < 30000));
 
                 groups[s.role].push({ ...s, isLocked, lockReason, isOnline });
             }
@@ -459,7 +448,6 @@ function StaffStatusCard({ onViewAll }) {
                                 {members.map(m => (
                                     <div key={m.username} className="bg-black/20 rounded-lg p-2 flex items-center justify-between">
                                         <div className="flex items-center gap-2 overflow-hidden">
-                                            {/* Status Dot */}
                                             <div className={`w-2 h-2 rounded-full flex-shrink-0 ${m.isOnline ? 'bg-emerald-500 animate-pulse shadow-[0_0_5px_#10b981]' : 'bg-slate-700'}`}></div>
                                             <span className={`text-xs truncate ${m.isOnline ? 'text-white' : 'text-slate-500'}`}>{m.username}</span>
                                         </div>
@@ -545,7 +533,7 @@ function ConsoleModule({ currentUser }) {
     };
 
     return (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 h-[calc(100vh-140px)] -mt-4">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 md:gap-4 h-[calc(100vh-160px)]">
             {/* Input Form */}
             <div className="bg-slate-900/40 border border-white/5 rounded-2xl p-6 h-fit">
                 <h2 className="text-lg font-medium text-white mb-4 flex items-center gap-2">
