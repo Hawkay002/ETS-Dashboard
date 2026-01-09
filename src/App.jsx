@@ -10,7 +10,7 @@ import {
   UserCheck, Clock, Lock, LogOut, Menu, X, ChevronRight, Smartphone, LogIn,
   Filter, Download, Upload, Trash2, MoreVertical, CheckSquare, Square, Crown, 
   FileText, ChevronDown, X as CloseIcon, Terminal, Copy, Play, Save, Edit2, 
-  CheckCircle, AlertCircle, Eye, EyeOff, Unlock, User, Wifi
+  CheckCircle, AlertCircle, Eye, EyeOff, Unlock, User, Wifi, FileSpreadsheet
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
@@ -675,12 +675,19 @@ function GuestListModule({ tickets, initialFilterStatus, initialFilterType, init
             if (t.ticketType === 'Gold') displayType = 'VVIP';
             else if (t.ticketType === 'Diamond') displayType = 'VIP';
 
+            // Ensure scannedAt is properly exported if present
+            let scannedAtStr = null;
+            if (t.scannedAt) {
+                 // Format as readable ISO string or date string as per original request
+                 scannedAtStr = new Date(t.scannedAt).toISOString();
+            }
+
             return {
                 s_no: index + 1,
                 ticket_type: displayType,
                 id: t.id,
                 age: t.age || '',
-                scannedAt: t.scannedAt || null,
+                scannedAt: scannedAtStr, // This is the field that was missing/null
                 status: t.status,
                 phone: t.phone,
                 ticketType: t.ticketType || 'Classic',
@@ -1359,59 +1366,115 @@ function DeleteModal({ isOpen, onClose, onConfirm, count, type }) {
 }
 
 function ImportModal({ close, currentUser }) {
+    const [previewData, setPreviewData] = useState(null);
+    const fileInputRef = useRef(null);
+
     const handleFile = async (e) => {
         const file = e.target.files[0];
         if (!file) return;
         const reader = new FileReader();
         const extension = file.name.split('.').pop().toLowerCase();
         
-        const processData = async (data) => {
-            if (confirm(`Import ${data.length} records?`)) {
-                const batch = writeBatch(db);
-                data.forEach(row => {
-                    const ref = doc(collection(db, APP_COLLECTION_ROOT, SHARED_DATA_ID, 'tickets'));
-                    batch.set(ref, {
-                        name: row.name || row.Name,
-                        phone: String(row.phone || row.Phone || ''),
-                        ticketType: row.ticketType || row.Type || 'Classic',
-                        status: row.status || 'coming-soon',
-                        createdAt: Date.now(),
-                        createdBy: currentUser.email,
-                        age: row.age || '',
-                        gender: row.gender || '',
-                        scanned: false
-                    });
-                });
-                await batch.commit();
-                close();
-            }
+        reader.onload = async (evt) => {
+             let data = [];
+             if (extension === 'json') {
+                 data = JSON.parse(evt.target.result);
+             } else if (extension === 'csv') {
+                 const wb = XLSX.read(evt.target.result, { type: 'binary' });
+                 const ws = wb.Sheets[wb.SheetNames[0]];
+                 data = XLSX.utils.sheet_to_json(ws);
+             }
+             setPreviewData(data);
         };
 
         if (extension === 'json') {
-            reader.onload = async (evt) => processData(JSON.parse(evt.target.result));
             reader.readAsText(file);
-        } else if (extension === 'csv') {
-            reader.onload = async (evt) => {
-                const wb = XLSX.read(evt.target.result, { type: 'binary' });
-                const ws = wb.Sheets[wb.SheetNames[0]];
-                processData(XLSX.utils.sheet_to_json(ws));
-            };
+        } else {
             reader.readAsBinaryString(file);
         }
     };
 
+    const confirmImport = async () => {
+        if (!previewData) return;
+        
+        const batch = writeBatch(db);
+        previewData.forEach(row => {
+            const ref = doc(collection(db, APP_COLLECTION_ROOT, SHARED_DATA_ID, 'tickets'));
+            
+            // Handle Scanned Status
+            let finalStatus = row.status || 'coming-soon';
+            let isScanned = row.scanned === true || row.scanned === 'true' || finalStatus === 'arrived';
+            
+            // Handle ScannedAt
+            let scannedTime = null;
+            if (isScanned) {
+                if (row.scannedAt) {
+                    // Try to parse if string
+                    const parsed = new Date(row.scannedAt).getTime();
+                    scannedTime = isNaN(parsed) ? Date.now() : parsed;
+                } else {
+                    scannedTime = Date.now(); // Default if status is arrived but no time provided
+                }
+            }
+
+            batch.set(ref, {
+                name: row.name || row.Name,
+                phone: String(row.phone || row.Phone || ''),
+                ticketType: row.ticketType || row.Type || 'Classic',
+                status: finalStatus,
+                createdAt: row.createdAt ? new Date(row.createdAt).getTime() : Date.now(),
+                createdBy: currentUser.email,
+                age: row.age || '',
+                gender: row.gender || '',
+                scanned: isScanned,
+                scannedAt: scannedTime
+            });
+        });
+        await batch.commit();
+        close();
+    };
+
     return (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
-            <div className="bg-slate-900 border border-white/10 rounded-2xl p-6 w-full max-w-md">
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm animate-in fade-in">
+            <div className="bg-slate-900 border border-white/10 rounded-2xl p-6 w-full max-w-md shadow-2xl relative">
                 <h3 className="text-lg font-medium text-white mb-4">Import Guests</h3>
-                <div className="border-2 border-dashed border-white/10 rounded-xl p-8 text-center mb-4">
-                    <input type="file" accept=".csv,text/csv,application/vnd.ms-excel,.json,application/json" onChange={handleFile} className="hidden" id="fileImport" />
-                    <label htmlFor="fileImport" className="cursor-pointer flex flex-col items-center gap-2">
-                        <Upload className="w-8 h-8 text-slate-500" />
-                        <span className="text-sm text-slate-400">Click to upload CSV or JSON</span>
-                    </label>
-                </div>
-                <button onClick={close} className="w-full py-2 text-sm text-slate-500 hover:text-white">Cancel</button>
+                
+                {!previewData ? (
+                    <>
+                        <div className="border-2 border-dashed border-white/10 rounded-xl p-8 text-center mb-4 hover:bg-white/5 transition-colors">
+                            <input 
+                                type="file" 
+                                accept=".csv,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,.json,application/json" 
+                                onChange={handleFile} 
+                                className="hidden" 
+                                id="fileImport" 
+                                ref={fileInputRef}
+                            />
+                            <label htmlFor="fileImport" className="cursor-pointer flex flex-col items-center gap-2 w-full h-full">
+                                <Upload className="w-8 h-8 text-slate-500" />
+                                <span className="text-sm text-slate-400">Click to upload CSV or JSON</span>
+                            </label>
+                        </div>
+                        <button onClick={close} className="w-full py-2.5 rounded-xl border border-white/10 text-slate-400 text-sm hover:bg-white/5 transition-colors">Cancel</button>
+                    </>
+                ) : (
+                    <div className="space-y-4">
+                        <div className="bg-black/20 p-4 rounded-xl border border-white/5 flex items-center gap-4">
+                            <div className="w-10 h-10 rounded-full bg-emerald-500/10 flex items-center justify-center border border-emerald-500/20">
+                                <FileSpreadsheet className="w-5 h-5 text-emerald-500" />
+                            </div>
+                            <div>
+                                <p className="text-sm font-medium text-white">Ready to Import</p>
+                                <p className="text-xs text-slate-500">{previewData.length} records found</p>
+                            </div>
+                        </div>
+                        
+                        <div className="flex gap-3 mt-4">
+                            <button onClick={() => setPreviewData(null)} className="flex-1 py-2.5 rounded-xl border border-white/10 text-slate-400 text-sm hover:bg-white/5 transition-colors">Back</button>
+                            <button onClick={confirmImport} className="flex-1 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-medium hover:bg-blue-500 transition-all shadow-lg shadow-blue-900/20">Confirm Import</button>
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
     );
