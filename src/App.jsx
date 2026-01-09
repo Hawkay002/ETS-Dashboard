@@ -533,7 +533,7 @@ function ConsoleModule({ currentUser }) {
     };
 
     return (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 md:gap-4 h-[calc(100vh-160px)]">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 h-[calc(100vh-160px)]">
             {/* Input Form */}
             <div className="bg-slate-900/40 border border-white/5 rounded-2xl p-6 h-fit">
                 <h2 className="text-lg font-medium text-white mb-4 flex items-center gap-2">
@@ -1020,10 +1020,23 @@ function SettingsModule({ settings, currentUser }) {
             <div className="bg-slate-900/40 border border-white/5 rounded-2xl p-6">
                <div className="flex justify-between items-center mb-6">
                    <h2 className="text-lg font-medium text-white flex items-center gap-2"><Settings className="w-5 h-5"/> Configuration</h2>
-                   <button onClick={() => isEditing ? handleSaveConfig() : setIsEditing(true)} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${isEditing ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20' : 'bg-white/5 text-slate-400 hover:text-white border border-white/10'}`}>
-                       {isEditing ? <><Save className="w-3 h-3"/> Save Changes</> : <><Edit2 className="w-3 h-3"/> Edit</>}
-                   </button>
+                   
+                   <div className="flex gap-2">
+                       {isEditing ? (
+                           <>
+                             <button onClick={() => setIsEditing(false)} className="px-3 py-1.5 rounded-lg text-xs font-medium bg-white/5 text-slate-400 hover:text-white border border-white/10 transition-all">Cancel</button>
+                             <button onClick={handleSaveConfig} className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20 transition-all">
+                                 <Save className="w-3 h-3"/> Save
+                             </button>
+                           </>
+                       ) : (
+                           <button onClick={() => setIsEditing(true)} className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium bg-white/5 text-slate-400 hover:text-white border border-white/10 transition-all">
+                               <Edit2 className="w-3 h-3"/> Edit
+                           </button>
+                       )}
+                   </div>
                </div>
+
                <div className="space-y-6">
                  <div className="flex flex-col gap-1 pb-4 border-b border-white/5">
                    <span className="text-xs text-slate-500 uppercase">Event Name</span>
@@ -1066,6 +1079,7 @@ function AdminControlPanel() {
     
     const [isLockModalOpen, setIsLockModalOpen] = useState(false);
     const [passwordInput, setPasswordInput] = useState('');
+    const [showPassword, setShowPassword] = useState(false);
     const [lockReason, setLockReason] = useState('basic');
     const [maintHours, setMaintHours] = useState('');
     const [maintMins, setMaintMins] = useState('');
@@ -1135,6 +1149,7 @@ function AdminControlPanel() {
         if(selectedUsernames.size === 0) return alert("Select users first.");
         setIsLockModalOpen(true);
         setPasswordInput('');
+        setShowPassword(false);
     };
 
     const confirmLockAction = async () => {
@@ -1295,7 +1310,22 @@ function AdminControlPanel() {
 
                        <div className="space-y-1 mb-6">
                            <label className="text-xs uppercase text-slate-500 font-semibold">Admin Password</label>
-                           <input type="password" value={passwordInput} onChange={e => setPasswordInput(e.target.value)} className="w-full bg-slate-950 border border-white/10 rounded-xl p-3 text-white text-center tracking-widest focus:border-red-500 focus:outline-none" placeholder="••••••" />
+                           <div className="relative">
+                               <input 
+                                   type={showPassword ? "text" : "password"} 
+                                   value={passwordInput} 
+                                   onChange={e => setPasswordInput(e.target.value)} 
+                                   className="w-full bg-slate-950 border border-white/10 rounded-xl p-3 text-white text-center tracking-widest focus:border-red-500 focus:outline-none" 
+                                   placeholder="••••••" 
+                                />
+                                <button 
+                                    type="button" 
+                                    onClick={() => setShowPassword(!showPassword)}
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white"
+                                >
+                                    {showPassword ? <EyeOff className="w-4 h-4"/> : <Eye className="w-4 h-4"/>}
+                                </button>
+                           </div>
                        </div>
 
                        <div className="flex gap-3">
