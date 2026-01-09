@@ -1431,7 +1431,13 @@ function ImportModal({ close, currentUser, existingTickets }) {
         
         const batch = writeBatch(db);
         previewData.forEach(row => {
-            const ref = doc(collection(db, APP_COLLECTION_ROOT, SHARED_DATA_ID, 'tickets'));
+            let docRef;
+            // Use existing ID if provided (from export), otherwise let Firestore auto-generate
+            if (row.id) {
+                docRef = doc(db, APP_COLLECTION_ROOT, SHARED_DATA_ID, 'tickets', String(row.id));
+            } else {
+                docRef = doc(collection(db, APP_COLLECTION_ROOT, SHARED_DATA_ID, 'tickets'));
+            }
             
             // Handle Scanned Status
             let finalStatus = row.status || 'coming-soon';
@@ -1448,7 +1454,7 @@ function ImportModal({ close, currentUser, existingTickets }) {
                 }
             }
 
-            batch.set(ref, {
+            batch.set(docRef, {
                 name: row.name || row.Name,
                 phone: String(row.phone || row.Phone || ''),
                 ticketType: row.ticketType || row.Type || 'Classic',
