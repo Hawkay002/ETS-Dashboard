@@ -534,9 +534,9 @@ function ConsoleModule({ currentUser }) {
     };
 
     return (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-2 h-[calc(100vh-160px)]">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-0 h-[calc(100vh-160px)]">
             {/* Input Form */}
-            <div className="bg-slate-900/40 border border-white/5 rounded-2xl p-6 h-fit">
+            <div className="bg-slate-900/40 border border-white/5 rounded-2xl p-4 h-fit mb-0">
                 <h2 className="text-lg font-medium text-white mb-4 flex items-center gap-2">
                     <Users className="w-5 h-5 text-blue-400" />
                     New User Parameters
@@ -578,7 +578,7 @@ function ConsoleModule({ currentUser }) {
                     <button 
                         onClick={generateCommand}
                         disabled={!formData.username || !formData.name}
-                        className="w-full py-3 rounded-xl bg-blue-600 text-white font-medium hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed mt-4 transition-colors"
+                        className="w-full py-3 rounded-xl bg-blue-600 text-white font-medium hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed mt-2 transition-colors"
                     >
                         Generate Command
                     </button>
