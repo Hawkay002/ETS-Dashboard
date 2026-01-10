@@ -11,7 +11,7 @@ import {
   Filter, Download, Upload, Trash2, MoreVertical, CheckSquare, Square, Crown, 
   FileText, ChevronDown, X as CloseIcon, Terminal, Copy, Play, Save, Edit2, 
   CheckCircle, AlertCircle, Eye, EyeOff, Unlock, User, Wifi, FileSpreadsheet,
-  AlertTriangle
+  AlertTriangle, HelpCircle, Database, RotateCcw
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
@@ -151,6 +151,7 @@ function DashboardLayout({ user }) {
   // SHARED FILTER STATES
   const [guestFilterStatus, setGuestFilterStatus] = useState('all'); 
   const [guestFilterType, setGuestFilterType] = useState('all'); 
+  const [guestFilterGender, setGuestFilterGender] = useState('all');
   const [guestSort, setGuestSort] = useState('newest'); 
 
   // Data Fetching
@@ -322,9 +323,11 @@ function DashboardLayout({ user }) {
                 tickets={tickets} 
                 initialFilterStatus={guestFilterStatus}
                 initialFilterType={guestFilterType}
+                initialFilterGender={guestFilterGender}
                 initialSort={guestSort}
                 setFilterStatus={setGuestFilterStatus}
                 setFilterType={setGuestFilterType}
+                setFilterGender={setGuestFilterGender}
                 setSort={setGuestSort}
                 currentUser={user}
             />
@@ -632,7 +635,7 @@ function ConsoleModule({ currentUser }) {
 // ===========================================
 // SUB-MODULE: GUEST LIST
 // ===========================================
-function GuestListModule({ tickets, initialFilterStatus, initialFilterType, initialSort, setFilterStatus, setFilterType, setSort, currentUser }) {
+function GuestListModule({ tickets, initialFilterStatus, initialFilterType, initialFilterGender, initialSort, setFilterStatus, setFilterType, setFilterGender, setSort, currentUser }) {
     const [search, setSearch] = useState('');
     const [selectedIds, setSelectedIds] = useState(new Set());
     const [isSelectionMode, setIsSelectionMode] = useState(false);
@@ -647,16 +650,20 @@ function GuestListModule({ tickets, initialFilterStatus, initialFilterType, init
         if (initialFilterStatus !== 'all') res = res.filter(t => t.status === initialFilterStatus);
         if (initialFilterType === 'Special') res = res.filter(t => ['Diamond', 'Gold'].includes(t.ticketType));
         else if (initialFilterType !== 'all') res = res.filter(t => (t.ticketType || 'Classic') === initialFilterType);
+        if (initialFilterGender !== 'all') res = res.filter(t => (t.gender || 'Other') === initialFilterGender);
         
         res.sort((a, b) => {
             if (initialSort === 'newest') return b.createdAt - a.createdAt;
             if (initialSort === 'oldest') return a.createdAt - b.createdAt;
             if (initialSort === 'name-asc') return a.name.localeCompare(b.name);
+            if (initialSort === 'name-desc') return b.name.localeCompare(a.name);
             if (initialSort === 'type') { const r = { 'Gold': 2, 'Diamond': 1, 'Classic': 0 }; return (r[b.ticketType] || 0) - (r[a.ticketType] || 0); }
+            if (initialSort === 'age-young') return (Number(a.age) || 999) - (Number(b.age) || 999);
+            if (initialSort === 'age-old') return (Number(b.age) || 0) - (Number(a.age) || 0);
             return 0;
         });
         return res;
-    }, [tickets, search, initialFilterStatus, initialFilterType, initialSort]);
+    }, [tickets, search, initialFilterStatus, initialFilterType, initialFilterGender, initialSort]);
 
     const toggleSelect = (id) => { const n = new Set(selectedIds); if (n.has(id)) n.delete(id); else n.add(id); setSelectedIds(n); };
     const toggleSelectAll = () => { if (selectedIds.size === filteredTickets.length) setSelectedIds(new Set()); else setSelectedIds(new Set(filteredTickets.map(t => t.id))); };
@@ -792,19 +799,33 @@ function GuestListModule({ tickets, initialFilterStatus, initialFilterType, init
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
                     <input type="text" placeholder="Search guests..." value={search} onChange={e => setSearch(e.target.value)} className="w-full bg-slate-950 border border-white/10 rounded-xl py-2 pl-10 pr-4 text-sm focus:outline-none focus:border-blue-500 text-white placeholder:text-slate-600" />
                 </div>
-                <div className="flex gap-2 w-full">
-                    <select value={initialFilterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="bg-slate-950 border border-white/10 rounded-xl text-sm px-3 py-2.5 text-slate-300 focus:outline-none flex-1 min-w-0">
+                <div className="flex gap-2 w-full overflow-x-auto pb-1 scrollbar-thin">
+                    <select value={initialFilterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="bg-slate-950 border border-white/10 rounded-xl text-sm px-3 py-2.5 text-slate-300 focus:outline-none flex-1 min-w-[120px]">
                         <option value="all">All Status</option>
                         <option value="arrived">Arrived</option>
                         <option value="coming-soon">Pending</option>
                         <option value="absent">Absent</option>
                     </select>
-                    <select value={initialFilterType} onChange={(e) => setFilterType(e.target.value)} className="bg-slate-950 border border-white/10 rounded-xl text-sm px-3 py-2.5 text-slate-300 focus:outline-none flex-1 min-w-0">
+                    <select value={initialFilterType} onChange={(e) => setFilterType(e.target.value)} className="bg-slate-950 border border-white/10 rounded-xl text-sm px-3 py-2.5 text-slate-300 focus:outline-none flex-1 min-w-[120px]">
                         <option value="all">All Types</option>
                         <option value="Classic">Classic</option>
                         <option value="Diamond">VIP</option>
                         <option value="Gold">VVIP</option>
                         <option value="Special">Special</option>
+                    </select>
+                    <select value={initialFilterGender} onChange={(e) => setFilterGender(e.target.value)} className="bg-slate-950 border border-white/10 rounded-xl text-sm px-3 py-2.5 text-slate-300 focus:outline-none flex-1 min-w-[120px]">
+                        <option value="all">All Genders</option>
+                        <option value="Male">Male</option>
+                        <option value="Female">Female</option>
+                        <option value="Other">Other</option>
+                    </select>
+                    <select value={initialSort} onChange={(e) => setSort(e.target.value)} className="bg-slate-950 border border-white/10 rounded-xl text-sm px-3 py-2.5 text-slate-300 focus:outline-none flex-1 min-w-[120px]">
+                        <option value="newest">Newest First</option>
+                        <option value="oldest">Oldest First</option>
+                        <option value="name-asc">Name (A-Z)</option>
+                        <option value="name-desc">Name (Z-A)</option>
+                        <option value="age-young">Age (Youngest)</option>
+                        <option value="age-old">Age (Oldest)</option>
                     </select>
                     <button onClick={handleDeleteClick} disabled={selectedIds.size === 0} className={`p-2.5 rounded-xl border transition-all w-12 flex-none flex items-center justify-center ${selectedIds.size > 0 ? 'border-red-500/20 bg-red-500/10 text-red-400 cursor-pointer' : 'border-white/5 text-slate-600 opacity-50 cursor-not-allowed'}`}><Trash2 className="w-5 h-5" /></button>
                     <button onClick={toggleSelectionMode} className={`p-2.5 rounded-xl border w-12 flex-none flex items-center justify-center ${isSelectionMode ? 'bg-blue-600 border-blue-600 text-white' : 'border-white/10 text-slate-400'}`}><CheckSquare className="w-5 h-5" /></button>
@@ -946,17 +967,23 @@ function LogsModule({ logs }) {
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
                     <input type="text" placeholder="Search logs..." value={search} onChange={e => setSearch(e.target.value)} className="w-full bg-slate-950 border border-white/10 rounded-xl py-2 pl-10 pr-4 text-sm focus:outline-none focus:border-blue-500 text-white" />
                 </div>
-                 <div className="flex gap-2 items-center w-full md:w-auto">
-                    <select value={filter} onChange={(e) => setFilter(e.target.value)} className="bg-slate-950 border border-white/10 rounded-xl text-sm px-4 py-2 text-slate-300 focus:outline-none flex-1 md:flex-initial md:w-48 h-[42px]">
+                 <div className="flex gap-2 items-center w-full md:w-auto overflow-x-auto pb-1 scrollbar-thin">
+                    <select value={filter} onChange={(e) => setFilter(e.target.value)} className="bg-slate-950 border border-white/10 rounded-xl text-sm px-4 py-2 text-slate-300 focus:outline-none flex-1 md:flex-initial min-w-[160px] h-[42px]">
                         <option value="all">All Actions</option>
-                        <option value="LOGIN">Login</option>
-                        <option value="TICKET_CREATE">Ticket Create</option>
-                        <option value="SCAN_ENTRY">Scan Entry</option>
-                        <option value="CONFIG_CHANGE">Config Change</option>
-                        <option value="LOCK_ACTION">Locks</option>
+                        <option value="LOGIN">Logins</option>
+                        <option value="TICKET_CREATE">Ticket Issue</option>
+                        <option value="SCAN_ENTRY">Scans</option>
+                        <option value="CONFIG_CHANGE">Configuration</option>
+                        <option value="HELP_CALL">Help Calls</option>
+                        <option value="TICKET_DELETE">Ticket Deletion</option>
+                        <option value="FACTORY_RESET">Factory Resets</option>
+                        <option value="LOCK_ACTION">Admin Locks</option>
+                        <option value="LOG_DELETE">Log Deletion</option>
+                        <option value="DATA_EXPORT">Data Export</option>
+                        <option value="DATA_IMPORT">Data Import</option>
                     </select>
-                    <button onClick={handleDeleteClick} disabled={selectedIds.size === 0} className={`p-2.5 rounded-xl border transition-all w-12 flex items-center justify-center h-[42px] ${selectedIds.size > 0 ? 'border-red-500/20 bg-red-500/10 text-red-400 cursor-pointer' : 'border-white/5 text-slate-600 opacity-50 cursor-not-allowed'}`}><Trash2 className="w-5 h-5" /></button>
-                    <button onClick={toggleSelectionMode} className={`p-2.5 rounded-xl border w-12 flex items-center justify-center h-[42px] ${isSelectionMode ? 'bg-blue-600 border-blue-600 text-white' : 'border-white/10 text-slate-400'}`}><CheckSquare className="w-5 h-5" /></button>
+                    <button onClick={handleDeleteClick} disabled={selectedIds.size === 0} className={`p-2.5 rounded-xl border transition-all w-12 flex items-center justify-center h-[42px] flex-none ${selectedIds.size > 0 ? 'border-red-500/20 bg-red-500/10 text-red-400 cursor-pointer' : 'border-white/5 text-slate-600 opacity-50 cursor-not-allowed'}`}><Trash2 className="w-5 h-5" /></button>
+                    <button onClick={toggleSelectionMode} className={`p-2.5 rounded-xl border w-12 flex items-center justify-center h-[42px] flex-none ${isSelectionMode ? 'bg-blue-600 border-blue-600 text-white' : 'border-white/10 text-slate-400'}`}><CheckSquare className="w-5 h-5" /></button>
                 </div>
             </div>
 
@@ -1571,11 +1598,35 @@ function TypeBadge({ type }) {
 }
 
 function ActionBadge({ action }) {
-  const colors = { 'LOGIN': 'text-blue-400 bg-blue-400/10 border-blue-400/20', 'TICKET_CREATE': 'text-emerald-400 bg-emerald-400/10 border-emerald-400/20', 'SCAN_ENTRY': 'text-pink-400 bg-pink-400/10 border-pink-400/20', 'CONFIG_CHANGE': 'text-amber-400 bg-amber-400/10 border-amber-400/20', 'LOCK_ACTION': 'text-red-400 bg-red-400/10 border-red-400/20' };
+  const colors = { 
+      'LOGIN': 'text-blue-400 bg-blue-400/10 border-blue-400/20', 
+      'TICKET_CREATE': 'text-emerald-400 bg-emerald-400/10 border-emerald-400/20', 
+      'SCAN_ENTRY': 'text-pink-400 bg-pink-400/10 border-pink-400/20', 
+      'CONFIG_CHANGE': 'text-amber-400 bg-amber-400/10 border-amber-400/20', 
+      'LOCK_ACTION': 'text-red-400 bg-red-400/10 border-red-400/20',
+      'HELP_CALL': 'text-rose-400 bg-rose-400/10 border-rose-400/20',
+      'TICKET_DELETE': 'text-red-500 bg-red-500/10 border-red-500/20',
+      'FACTORY_RESET': 'text-red-600 bg-red-600/10 border-red-600/20 font-bold',
+      'LOG_DELETE': 'text-orange-400 bg-orange-400/10 border-orange-400/20',
+      'DATA_EXPORT': 'text-indigo-400 bg-indigo-400/10 border-indigo-400/20',
+      'DATA_IMPORT': 'text-cyan-400 bg-cyan-400/10 border-cyan-400/20'
+  };
   return <span className={`px-2 py-0.5 rounded border text-[10px] font-mono uppercase tracking-wide ${colors[action] || 'text-slate-400 bg-white/5 border-white/10'}`}>{action}</span>;
 }
 
 function StatusDot({ action }) {
-  const colors = { 'LOGIN': 'bg-blue-500', 'TICKET_CREATE': 'bg-emerald-500', 'SCAN_ENTRY': 'bg-pink-500', 'CONFIG_CHANGE': 'bg-amber-500', 'LOCK_ACTION': 'bg-red-500' };
+  const colors = { 
+      'LOGIN': 'bg-blue-500', 
+      'TICKET_CREATE': 'bg-emerald-500', 
+      'SCAN_ENTRY': 'bg-pink-500', 
+      'CONFIG_CHANGE': 'bg-amber-500', 
+      'LOCK_ACTION': 'bg-red-500',
+      'HELP_CALL': 'bg-rose-500',
+      'TICKET_DELETE': 'bg-red-600',
+      'FACTORY_RESET': 'bg-red-700',
+      'LOG_DELETE': 'bg-orange-500',
+      'DATA_EXPORT': 'bg-indigo-500',
+      'DATA_IMPORT': 'bg-cyan-500'
+  };
   return <div className={`w-2 h-2 rounded-full mt-1.5 ${colors[action] || 'bg-slate-500'}`}></div>;
 }
